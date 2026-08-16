@@ -1,0 +1,14 @@
+/vendor/
+/composer.lock
+tests/**/_generated/
+tests/**/_output/
+.phpunit.result.cache
+.phpunit.cache/
+.idea/
+
+# Freshly generated each CI run by tests/_ci-standalone/generate-transfers.php, same convention any real
+# Spryker project already uses for its own src/Generated/ — never committed, regenerated every run.
+/src/Generated/
+/tests/_ci-standalone/_output/
+/tests/_ci-standalone/_data/
+/tests/_ci-standalone/_support/
