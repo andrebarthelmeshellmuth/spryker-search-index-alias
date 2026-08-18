@@ -190,7 +190,13 @@ jobs:
         working-directory: shop
         run: |
           vendor/bin/console transfer:generate
-          vendor/bin/console propel:install
+          # Pure schema-file codegen (aggregates every installed package's own schema.xml, then parses it
+          # into Orm\Zed\*\Persistence PHP classes) -- phpstan only needs those CLASSES to exist, not a
+          # real database. `propel:install` additionally tries to CREATE the actual database, which fails
+          # here (no MySQL service configured for this job -- see the job's own comment on why one isn't
+          # needed for phpstan/IDE-stub generation).
+          vendor/bin/console propel:schema:copy
+          vendor/bin/console propel:model:build
           vendor/bin/console dev:ide-auto-completion:generate
 
       - name: phpstan

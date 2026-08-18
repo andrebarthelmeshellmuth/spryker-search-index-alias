@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<ruleset name="search-index-alias-parameter-list"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>
+        Parameter-count check, exempting Facades and orchestrator-style coordinators: a module Facade's
+        public API grows with the feature set over time, and RebuildOrchestrator takes one collaborator
+        per genuinely orthogonal step of the blue-green rebuild pipeline (rollout lifecycle, naming,
+        cloning, mapping diff, bulk load, mirror queue bind/drain, alias switching, persistence, async
+        dispatch, the auto-flip flag). Collapsing either into a single options array/DTO would trade a
+        self-documenting, individually-typed dependency list for an equally large but less discoverable
+        one, not actually reduce complexity. Run as its own phpmd invocation, separate from phpmd.xml —
+        see that file's description for why.
+    </description>
+
+    <exclude-pattern>*Facade.php</exclude-pattern>
+    <exclude-pattern>*FacadeInterface.php</exclude-pattern>
+    <exclude-pattern>*RebuildOrchestrator.php</exclude-pattern>
+    <exclude-pattern>*/src/Generated/*</exclude-pattern>
+
+    <rule ref="rulesets/codesize.xml/ExcessiveParameterList"/>
+</ruleset>

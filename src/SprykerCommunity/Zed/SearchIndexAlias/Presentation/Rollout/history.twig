@@ -1,0 +1,52 @@
+{% extends '@Gui/Layout/layout.twig' %}
+
+{% set widget_title = 'Rollout history' %}
+{% block section_title %}{{ widget_title | trans }} &mdash; {{ aliasName }}{% endblock %}
+
+{% block content %}
+    {% embed '@Gui/Partials/widget.twig' with { widget_title: 'Rollout history for ' ~ aliasName } %}
+        {% block widget_content %}
+            <p><a href="{{ url('/search-index-alias/index') }}">&larr; {{ 'Back to overview' | trans }}</a></p>
+            {% if history %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>{{ 'Started' | trans }}</th>
+                                <th>{{ 'Finished' | trans }}</th>
+                                <th>{{ 'Status' | trans }}</th>
+                                <th>{{ 'Triggered by' | trans }}</th>
+                                <th>{{ 'Target index' | trans }}</th>
+                                <th>{{ 'Docs (expected / actual)' | trans }}</th>
+                                <th>{{ 'Mapping diff' | trans }}</th>
+                                <th>{{ 'Outcome' | trans }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rollout in history %}
+                                <tr>
+                                    <td>{{ rollout.startedAt ? rollout.startedAt|date('Y-m-d H:i:s') : '—' }}</td>
+                                    <td>{{ rollout.finishedAt ? rollout.finishedAt|date('Y-m-d H:i:s') : '—' }}</td>
+                                    <td>{{ rollout.status }}</td>
+                                    <td>{{ rollout.triggeredByUser ?: '—' }}</td>
+                                    <td>{{ rollout.targetIndexName ?: '—' }}</td>
+                                    <td>{{ rollout.expectedDocumentCount ?: '—' }} / {{ rollout.actualDocumentCount ?: '—' }}</td>
+                                    <td>
+                                        {% if rollout.searchIndexMappingDiff %}
+                                            {{ rollout.searchIndexMappingDiff.classification }}
+                                        {% else %}
+                                            &mdash;
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ rollout.outcome ?: '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p>{{ 'No rollout has been recorded for this scope yet.' | trans }}</p>
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+{% endblock %}

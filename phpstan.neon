@@ -1,0 +1,9 @@
+parameters:
+    level: 8
+
+    # Resolves relative to a host shop's vendor/spryker-community/search-index-alias/ install path —
+    # this package's own DependencyProviders use the shop's generated Locator and
+    # Generated\Shared\Transfer\* classes, which don't exist outside a host shop (see README, "Testing
+    # and CI").
+    bootstrapFiles:
+        - '%rootDir%/../../../phpstan-bootstrap.php'

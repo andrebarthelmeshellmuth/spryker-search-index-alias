@@ -1,0 +1,221 @@
+{% extends '@Gui/Layout/layout.twig' %}
+
+{% set widget_title = 'Search Index Alias' %}
+{% block section_title %}{{ widget_title | trans }}{% endblock %}
+
+{% block content %}
+    {% embed '@Gui/Partials/widget.twig' with { widget_title: scope ? scope.aliasName : 'Managed scopes' } %}
+        {% block widget_content %}
+            <p>Pick a source and a store to manage that scope's physical indices.</p>
+            <p>
+                "Adopt" migrates an existing concrete index into an alias, atomically and with zero
+                downtime -- do this once per scope before its first rebuild.
+            </p>
+            <p>
+                "Rebuild" builds a fresh target index in the background and, once it converges, leaves it
+                in status <code>ready</code> for you to "Flip" live traffic onto -- the live index is
+                never touched until you do.
+            </p>
+            <p>
+                Any product/page update published to the live index <em>while</em> a rebuild's bulk load
+                is running is not lost: it's captured on a mirror queue and replayed onto the target
+                afterward (and once more right before a flip, to catch anything published since), so the
+                target converges on the same data the live index has, not a stale snapshot from when the
+                rebuild started.
+            </p>
+            <div class="alert {{ pendingFlipCandidates ? 'alert-warning' : 'alert-info' }}" style="margin-bottom: 15px;">
+                <strong>{{ 'Pending deploy flips' | trans }}</strong>
+                <span title="{{ 'What search-index-alias:deploy-flip -- the command the deploy pipeline\'s SPRYKER_HOOK_AFTER_DEPLOY hook runs -- would flip right now. Cross-scope; not affected by the Source/Store filter below.' | trans }}" style="cursor: help;">(?)</span>
+                {% if pendingFlipCandidates %}
+                    <ul style="margin-bottom: 0;">
+                        {% for candidate in pendingFlipCandidates %}
+                            <li><code>{{ candidate.searchIndexScope.aliasName }}</code> &rarr; <code>{{ candidate.targetIndexName }}</code> ({{ candidate.actualDocumentCount ?: '—' }} {{ 'docs' | trans }})</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span>{{ 'No scope is flagged -- the next deploy would flip nothing.' | trans }}</span>
+                {% endif %}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <form method="get" class="form-inline">
+                    <label for="source">{{ 'Source' | trans }}</label>
+                    <select name="source" id="source" class="form-control" onchange="this.form.submit()">
+                        <option value="" {% if not selectedSource %}selected="selected"{% endif %}>{{ 'Select a source' | trans }}</option>
+                        {% for source in sources %}
+                            <option value="{{ source }}" {% if source == selectedSource %}selected="selected"{% endif %}>
+                                {{ source }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <label for="store" style="margin-left: 10px;">{{ 'Store' | trans }}</label>
+                    <select name="store" id="store" class="form-control" onchange="this.form.submit()">
+                        <option value="" {% if not selectedStore %}selected="selected"{% endif %}>{{ 'Select a store' | trans }}</option>
+                        {% for store in stores %}
+                            <option value="{{ store }}" {% if store == selectedStore %}selected="selected"{% endif %}>
+                                {{ store }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% if scope %}
+                    <a href="{{ url('/search-index-alias/rollout/history', { alias: scope.aliasName }) }}" class="btn btn-outline-secondary">{{ 'View rollout history' | trans }} &rarr;</a>
+                {% endif %}
+            </div>
+
+            {% if not scope %}
+                <p>{{ 'Select a source and a store above to manage its indices.' | trans }}</p>
+            {% else %}
+                {% if activeRollout %}
+                    <p>
+                        {{ 'Active rollout' | trans }}: <strong>{{ activeRollout.status }}</strong>
+                        &mdash; {{ 'target' | trans }} <code>{{ activeRollout.targetIndexName }}</code>
+                        {% if canFlip %}({{ 'Flip below switches live traffic onto this index' | trans }}){% endif %}
+                        {% if canFlip and activeRollout.flipPending %}
+                            <span class="label label-warning">{{ 'flagged for next deploy' | trans }}</span>
+                        {% endif %}
+                    </p>
+                {% endif %}
+                <div style="margin-bottom: 20px;">
+                    {% if adoptFormView %}
+                        {{ form_start(adoptFormView, { action: url('/search-index-alias/rollout/adopt'), method: 'POST' }) }}
+                        {{ form_widget(adoptFormView) }}
+                        <button type="submit" class="btn btn-outline-primary">{{ 'Adopt' | trans }}</button>
+                        {{ form_end(adoptFormView) }}
+                    {% endif %}
+                    {% if canRebuild %}
+                        {{ form_start(rebuildFormView, { action: url('/search-index-alias/rollout/rebuild'), method: 'POST', attr: { class: 'form-inline', style: 'display:inline-block;' } }) }}
+                        <span style="display:inline-flex; align-items:center; gap:4px; vertical-align:middle; margin: 0 8px;">
+                            {{ form_widget(rebuildFormView.optimizeForBulkLoad) }}
+                            <span title="{{ 'Disables the TARGET index\'s Elasticsearch refresh interval and replicas for the duration of the bulk load only, then restores both -- speeds up loading a large catalog. This does NOT pause or skip anything on the live index: search stays fully up to date the whole time, and the mirror queue keeps capturing live updates as normal regardless of this checkbox.' | trans }}" style="cursor: help; border: 1px solid; border-radius: 50%; width: 14px; height: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; margin-top: -8px;">?</span>
+                        </span>
+                        <button type="submit" class="btn btn-outline-primary"
+                            onclick="return confirm('Start a rebuild for {{ scope.aliasName }}? It runs in the background; the live index is not touched until you flip.');">{{ 'Rebuild' | trans }}</button>
+                        {{ form_widget(rebuildFormView) }}
+                        {{ form_end(rebuildFormView) }}
+                    {% endif %}
+                    {% if canFlip %}
+                        {{ form_start(flipFormView, { action: url('/search-index-alias/rollout/flip'), method: 'POST' }) }}
+                        {{ form_widget(flipFormView) }}
+                        <button type="submit" class="btn btn-success"
+                            onclick="return confirm('Flip {{ scope.aliasName }} live traffic onto {{ activeRollout.targetIndexName }} now?');">{{ 'Flip' | trans }}</button>
+                        {{ form_end(flipFormView) }}
+                    {% endif %}
+                    {% if canFlip and not activeRollout.flipPending %}
+                        {{ form_start(flipPendingFormView, { action: url('/search-index-alias/deploy-flag/mark-flip-pending'), method: 'POST', attr: { style: 'display:inline-block;' } }) }}
+                        {{ form_widget(flipPendingFormView) }}
+                        <button type="submit" class="btn btn-outline-warning"
+                            title="{{ 'Do not flip now -- flag this index so search-index-alias:deploy-flip flips it automatically the next time the deploy pipeline runs (SPRYKER_HOOK_AFTER_DEPLOY).' | trans }}">{{ 'Flag for next deploy' | trans }}</button>
+                        {{ form_end(flipPendingFormView) }}
+                    {% elseif canFlip %}
+                        {{ form_start(flipPendingFormView, { action: url('/search-index-alias/deploy-flag/unmark-flip-pending'), method: 'POST', attr: { style: 'display:inline-block;' } }) }}
+                        {{ form_widget(flipPendingFormView) }}
+                        <button type="submit" class="btn btn-outline-secondary">{{ 'Unflag' | trans }}</button>
+                        {{ form_end(flipPendingFormView) }}
+                    {% endif %}
+                    {% if canAbort %}
+                        {{ form_start(abortFormView, { action: url('/search-index-alias/rollout/abort'), method: 'POST' }) }}
+                        {{ form_widget(abortFormView) }}
+                        <button type="submit" class="btn btn-outline-danger"
+                            onclick="return confirm('Abort the in-progress rollout for {{ scope.aliasName }}? The live index is never touched by an abort.');">{{ 'Abort' | trans }}</button>
+                        {{ form_end(abortFormView) }}
+                    {% endif %}
+                </div>
+
+                {% if indexRows %}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>{{ 'Index' | trans }}</th>
+                                    <th>{{ 'Current alias?' | trans }}</th>
+                                    <th>{{ 'Index status' | trans }}</th>
+                                    <th>{{ 'Docs' | trans }}</th>
+                                    <th>{{ 'Rollout status' | trans }}</th>
+                                    <th>{{ 'Triggered by' | trans }}</th>
+                                    <th>{{ 'Last event' | trans }}</th>
+                                    <th>{{ 'Mapping diff' | trans }}</th>
+                                    <th>{{ 'Actions' | trans }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in indexRows %}
+                                    {% set physicalIndex = row.physicalIndex %}
+                                    {% set rollout = physicalIndex.searchIndexRollout %}
+                                    <tr>
+                                        <td>{{ physicalIndex.indexName }}</td>
+                                        <td>
+                                            {% if physicalIndex.isCurrentAlias %}
+                                                <span class="label label-success">{{ 'current alias' | trans }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if physicalIndex.status == 'current' %}
+                                                <span class="label label-success">{{ 'current' | trans }}</span>
+                                            {% elseif physicalIndex.status == 'replaced' %}
+                                                <span class="label label-info">{{ 'replaced' | trans }}</span>
+                                            {% elseif physicalIndex.status == 'skipped' %}
+                                                <span class="label label-warning">{{ 'skipped' | trans }}</span>
+                                            {% elseif physicalIndex.status == 'unknown' %}
+                                                {{ 'unknown' | trans }}
+                                            {% else %}
+                                                <span class="label label-primary">{{ physicalIndex.status | trans }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ physicalIndex.documentCount }}</td>
+                                        <td>{{ rollout ? rollout.status : '—' }}</td>
+                                        <td>{{ rollout ? (rollout.triggeredByUser ?: '—') : '—' }}</td>
+                                        <td>{{ rollout and rollout.startedAt ? rollout.startedAt|date('Y-m-d H:i:s') : '—' }}</td>
+                                        <td>
+                                            {% if rollout and rollout.searchIndexMappingDiff %}
+                                                {{ rollout.searchIndexMappingDiff.classification }}
+                                            {% else %}
+                                                &mdash;
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if row.rollbackFormView %}
+                                                {% set wasEverLive = physicalIndex.status == 'replaced' %}
+                                                {{ form_start(row.rollbackFormView, { action: url('/search-index-alias/rollout/rollback'), method: 'POST' }) }}
+                                                {{ form_widget(row.rollbackFormView) }}
+                                                {% if wasEverLive %}
+                                                    <button type="submit" class="btn btn-xs btn-outline-warning"
+                                                        onclick="return confirm('Roll {{ scope.aliasName }} back to {{ physicalIndex.indexName }} now? This is an atomic, immediate switch.');">{{ 'Roll back to this index' | trans }}</button>
+                                                {% else %}
+                                                    <button type="submit" class="btn btn-xs btn-outline-warning"
+                                                        onclick="return confirm('Flip {{ scope.aliasName }} to {{ physicalIndex.indexName }} now? This index never served live traffic before -- this is an atomic, immediate switch.');">{{ 'Flip to this index' | trans }}</button>
+                                                {% endif %}
+                                                {{ form_end(row.rollbackFormView) }}
+                                            {% endif %}
+                                            {% if row.flagRollbackPendingFormView and not row.isRollbackPending %}
+                                                {{ form_start(row.flagRollbackPendingFormView, { action: url('/search-index-alias/deploy-flag/mark-rollback-pending'), method: 'POST', attr: { style: 'display:inline-block;' } }) }}
+                                                {{ form_widget(row.flagRollbackPendingFormView) }}
+                                                <button type="submit" class="btn btn-xs btn-outline-secondary"
+                                                    title="{{ 'Do not switch now -- flag this index so search-index-alias:deploy-flip switches to it automatically the next time the deploy pipeline runs (SPRYKER_HOOK_AFTER_DEPLOY).' | trans }}">{{ 'Flag for next deploy' | trans }}</button>
+                                                {{ form_end(row.flagRollbackPendingFormView) }}
+                                            {% elseif row.flagRollbackPendingFormView %}
+                                                <span class="label label-warning">{{ 'flagged for next deploy' | trans }}</span>
+                                                {{ form_start(row.flagRollbackPendingFormView, { action: url('/search-index-alias/deploy-flag/unmark-rollback-pending'), method: 'POST', attr: { style: 'display:inline-block;' } }) }}
+                                                {{ form_widget(row.flagRollbackPendingFormView) }}
+                                                <button type="submit" class="btn btn-xs btn-outline-secondary">{{ 'Unflag' | trans }}</button>
+                                                {{ form_end(row.flagRollbackPendingFormView) }}
+                                            {% endif %}
+                                            {% if row.deleteFormView %}
+                                                {{ form_start(row.deleteFormView, { action: url('/search-index-alias/rollout/delete-index'), method: 'POST' }) }}
+                                                {{ form_widget(row.deleteFormView) }}
+                                                <button type="submit" class="btn btn-xs btn-outline-danger"
+                                                    onclick="return confirm('Permanently delete {{ physicalIndex.indexName }}? This cannot be undone.');">{{ 'Delete' | trans }}</button>
+                                                {{ form_end(row.deleteFormView) }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p>{{ 'No physical index exists for this scope yet.' | trans }}</p>
+                {% endif %}
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
+{% endblock %}

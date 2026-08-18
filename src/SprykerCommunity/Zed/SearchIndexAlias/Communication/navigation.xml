@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <search-index-alias-gui>
+        <label>Search Index Alias</label>
+        <title>Search Index Alias</title>
+        <icon>tune</icon>
+        <bundle>search-index-alias</bundle>
+        <controller>index</controller>
+        <action>index</action>
+        <pages>
+            <search-index-alias-overview>
+                <label>Overview</label>
+                <title>Overview</title>
+                <bundle>search-index-alias</bundle>
+                <controller>index</controller>
+                <action>index</action>
+            </search-index-alias-overview>
+            <search-index-alias-history>
+                <label>History</label>
+                <title>Rollout History</title>
+                <bundle>search-index-alias</bundle>
+                <controller>rollout</controller>
+                <action>history</action>
+                <visible>0</visible>
+            </search-index-alias-history>
+            <search-index-alias-adopt>
+                <label>Adopt</label>
+                <title>Adopt</title>
+                <bundle>search-index-alias</bundle>
+                <controller>rollout</controller>
+                <action>adopt</action>
+                <visible>0</visible>
+            </search-index-alias-adopt>
+            <search-index-alias-rebuild>
+                <label>Rebuild</label>
+                <title>Rebuild</title>
+                <bundle>search-index-alias</bundle>
+                <controller>rollout</controller>
+                <action>rebuild</action>
+                <visible>0</visible>
+            </search-index-alias-rebuild>
+            <search-index-alias-flip>
+                <label>Flip</label>
+                <title>Flip</title>
+                <bundle>search-index-alias</bundle>
+                <controller>rollout</controller>
+                <action>flip</action>
+                <visible>0</visible>
+            </search-index-alias-flip>
+            <search-index-alias-abort>
+                <label>Abort</label>
+                <title>Abort</title>
+                <bundle>search-index-alias</bundle>
+                <controller>rollout</controller>
+                <action>abort</action>
+                <visible>0</visible>
+            </search-index-alias-abort>
+        </pages>
+    </search-index-alias-gui>
+</config>

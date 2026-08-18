@@ -1,0 +1,59 @@
+<?php
+
+/**
+ * This file is part of the spryker-community/search-index-alias package.
+ * For full license information, please view the LICENSE file that was distributed with this source code.
+ */
+
+declare(strict_types = 1);
+
+namespace SprykerCommunity\Zed\SearchIndexAlias\Communication\Form;
+
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Validator\Constraints\NotBlank;
+
+class AbortForm extends AbstractType
+{
+    /**
+     * @var string
+     */
+    public const FIELD_ALIAS_NAME = 'aliasName';
+
+    /**
+     * @var string
+     */
+    public const FIELD_REASON = 'reason';
+
+    /**
+     * @var string
+     */
+    public const FIELD_REDIRECT_TO = 'redirectTo';
+
+    /**
+     * @param \Symfony\Component\Form\FormBuilderInterface $builder
+     * @param array<string, mixed> $options
+     */
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        parent::buildForm($builder, $options);
+
+        $builder->add(static::FIELD_ALIAS_NAME, HiddenType::class, [
+            'constraints' => [new NotBlank()],
+        ]);
+        $builder->add(static::FIELD_REASON, TextType::class, [
+            'label' => 'Reason',
+            'constraints' => [new NotBlank()],
+        ]);
+        $builder->add(static::FIELD_REDIRECT_TO, HiddenType::class, [
+            'required' => false,
+        ]);
+    }
+
+    public function getBlockPrefix(): string
+    {
+        return 'search_index_alias_abort';
+    }
+}

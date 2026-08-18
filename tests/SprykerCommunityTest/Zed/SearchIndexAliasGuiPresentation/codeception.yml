@@ -1,0 +1,49 @@
+namespace: SprykerCommunityTest\Zed\SearchIndexAliasGuiPresentation
+
+paths:
+    tests: .
+    data: _data
+    support: _support
+    output: _output
+
+coverage:
+    enabled: true
+    remote: false
+    include:
+        - 'packages/spryker-community/search-index-alias/src/*'
+
+# Kept as its own module directory, sibling to Zed/SearchIndexAlias, rather than a Presentation/
+# subfolder of it: that module's existing `Zed` suite has `path: .`, which recursively picks up every
+# file under it regardless of suite boundaries in codeception.yml -- nesting a WebDriver suite in there
+# would make that suite try (and fail) to load these Cests too. A sibling directory has its own scan
+# root and never overlaps. Same gotcha hit building search-debug's/search-ranking's/
+# search-ranking-optimizer's own Presentation suites -- see any of their equivalent files for the same note.
+suites:
+    Presentation:
+        path: Presentation
+        actor: SearchIndexAliasGuiPresentationTester
+        modules:
+            enabled:
+                - Asserts
+                - \PyzTest\Shared\Testify\Helper\Environment
+                - \SprykerTest\Shared\Application\Helper\ZedHelper
+                - \SprykerTest\Shared\Config\Helper\ConfigInit
+                - \SprykerTest\Shared\Testify\Helper\LocatorHelper:
+                    projectNamespaces: ['Pyz']
+                - WebDriver:
+                    url: ''
+                    browser: chrome
+                    window_size: 1920x1080
+                    # host: webdriver (the real docker-compose service name), not the demoshop's usual
+                    # 0.0.0.0 literal -- WebDriver's own _before() hook opens the session eagerly, before
+                    # ZedHelper::amZed()'s runtime host reconfigure ever runs, so the static host here has
+                    # to be correct from the start. Capabilities key is goog:chromeOptions (bare
+                    # chromeOptions silently does nothing), and headless/no-sandbox/disable-dev-shm-usage
+                    # are all required or Chrome crashes on launch in this container ("DevToolsActivePort
+                    # file doesn't exist"). All confirmed live building the sibling packages' own
+                    # Presentation suites first -- see webdriver-presentation-suite-infra-gotchas notes.
+                    host: webdriver
+                    restart: false
+                    capabilities:
+                        goog:chromeOptions:
+                            args: ['--headless', '--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox']

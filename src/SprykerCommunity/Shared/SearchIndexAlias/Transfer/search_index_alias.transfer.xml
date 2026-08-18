@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<transfers xmlns="spryker:transfer-01"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="spryker:transfer-01 http://static.spryker.com/transfer-01.xsd">
+
+    <!--
+        One (store, sourceIdentifier) index set this package manages. aliasName is never invented by
+        this package — it is always whatever core's own SourceIdentifier::translateToIndexName() would
+        compute, so the read path (Yves/Glue, still asking for the plain index name) needs zero changes:
+        that name simply becomes an alias instead of a concrete index.
+    -->
+    <transfer name="SearchIndexScope">
+        <property name="sourceIdentifier" type="string"/>
+        <property name="storeName" type="string"/>
+        <property name="aliasName" type="string"/>
+    </transfer>
+
+    <!-- Classification of a mapping diff between the live mapping and the mapping a rebuild would apply. -->
+    <transfer name="SearchIndexMappingDiff">
+        <property name="classification" type="string"/>
+        <property name="addedFields" type="string[]" singular="addedField"/>
+        <property name="breakingFields" type="string[]" singular="breakingField"/>
+    </transfer>
+
+    <!-- Persisted state for one rollout attempt. Source of truth for INTENT; the cluster is the source of truth for REALITY — SearchIndexHealth reconciles the two. -->
+    <transfer name="SearchIndexRollout">
+        <property name="idSearchIndexRollout" type="int"/>
+        <property name="searchIndexScope" type="SearchIndexScope"/>
+        <property name="status" type="string"/>
+        <property name="flipPending" type="bool"/>
+        <property name="liveIndexName" type="string"/>
+        <property name="targetIndexName" type="string"/>
+        <property name="mirrorQueueName" type="string"/>
+        <property name="searchIndexMappingDiff" type="SearchIndexMappingDiff"/>
+        <property name="expectedDocumentCount" type="int"/>
+        <property name="actualDocumentCount" type="int"/>
+        <property name="startedAt" type="string"/>
+        <property name="finishedAt" type="string"/>
+        <property name="triggeredByUser" type="string"/>
+        <property name="outcome" type="string"/>
+        <property name="failureReason" type="string"/>
+    </transfer>
+
+    <transfer name="SearchIndexRolloutCollection">
+        <property name="searchIndexRollouts" type="SearchIndexRollout[]" singular="searchIndexRollout"/>
+    </transfer>
+
+    <!-- A scope's "flip to this already-existing index on the next deploy-flip run" intent, the
+         rollback counterpart to SearchIndexRollout.flipPending. See spy_search_index_deploy_rollback_target's
+         own schema comment for why this isn't just another rollout-table column. -->
+    <transfer name="SearchIndexDeployRollbackTarget">
+        <property name="idSearchIndexDeployRollbackTarget" type="int"/>
+        <property name="searchIndexScope" type="SearchIndexScope"/>
+        <property name="targetIndexName" type="string"/>
+        <property name="triggeredByUser" type="string"/>
+        <property name="createdAt" type="string"/>
+    </transfer>
+
+    <!-- Drift-detection result for one scope: alias missing, pointing at 0/>1 indices, live index absent, orphaned un-aliased indices. -->
+    <transfer name="SearchIndexHealth">
+        <property name="searchIndexScope" type="SearchIndexScope"/>
+        <property name="isHealthy" type="bool"/>
+        <property name="issues" type="string[]" singular="issue"/>
+        <property name="aliasedIndexNames" type="string[]" singular="aliasedIndexName"/>
+        <property name="documentCount" type="int"/>
+    </transfer>
+
+    <transfer name="SearchIndexHealthCollection">
+        <property name="searchIndexHealths" type="SearchIndexHealth[]" singular="searchIndexHealth"/>
+    </transfer>
+
+    <!-- One physical index that belongs to a scope's alias — the History page's real unit, since a rollout
+         event and a physical index are not 1:1 (e.g. adoption's target has no "rebuild" rollout row). -->
+    <transfer name="SearchIndexPhysicalIndex">
+        <property name="indexName" type="string"/>
+        <property name="isCurrentAlias" type="bool"/>
+        <property name="status" type="string"/>
+        <property name="documentCount" type="int"/>
+        <property name="searchIndexRollout" type="SearchIndexRollout" strict="true"/>
+    </transfer>
+
+    <transfer name="SearchIndexPhysicalIndexCollection">
+        <property name="searchIndexPhysicalIndices" type="SearchIndexPhysicalIndex[]" singular="searchIndexPhysicalIndex"/>
+    </transfer>
+
+    <!-- Read-only diagnostic result: whether this package's own Zed back-office pages are reachable by
+         anybody other than an unrestricted (root-style) admin. Used only by
+         `search-index-alias:check-installation`, nothing on the request path consults it. -->
+    <transfer name="SearchIndexAliasBackOfficeAccessDiagnosis">
+        <property name="moduleNames" type="string[]" singular="moduleName"/>
+        <property name="unrestrictedRoleCount" type="int"/>
+        <property name="restrictedRoleCount" type="int"/>
+        <property name="restrictedRoleWithAccessCount" type="int"/>
+    </transfer>
+
+</transfers>

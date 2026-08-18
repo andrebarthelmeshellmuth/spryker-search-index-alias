@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<database xmlns="spryker:schema-01" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="zed" namespace="Orm\Zed\SearchIndexAlias\Persistence" package="src.Orm.Zed.SearchIndexAlias.Persistence" xsi:schemaLocation="spryker:schema-01 https://static.spryker.com/schema-01.xsd">
+
+    <!--
+        One row per rollout ATTEMPT, not per scope — this table is its own history/audit trail by
+        construction (query the latest row per (source_identifier, store_name) for current state), so no
+        separate "_history" table is needed. The cluster stays the source of truth for REALITY; this
+        table is the source of truth for INTENT (see SearchIndexHealthChecker, which reconciles the two).
+    -->
+    <table name="spy_search_index_rollout" idMethod="native" identifierQuoting="true">
+        <column name="id_search_index_rollout" type="INTEGER" required="true" autoIncrement="true" primaryKey="true"/>
+        <column name="source_identifier" type="VARCHAR" size="128" required="true"/>
+        <column name="store_name" type="VARCHAR" size="64" required="true"/>
+        <column name="alias_name" type="VARCHAR" size="255" required="true" description="Denormalized copy of the scope's canonical alias name -- avoids re-deriving it from (source_identifier, store_name) for display/filtering."/>
+        <column name="status" type="VARCHAR" size="32" required="true" defaultValue="idle" description="SearchIndexAliasConfig::STATUS_* -- idle, building, ready, flipping, flipped, aborted, failed."/>
+
+        <column name="flip_pending" type="BOOLEAN" required="true" defaultValue="false" description="Operator-set intent: 'flip this READY rollout the next time search-index-alias:deploy-flip runs' (the deploy pipeline's SPRYKER_HOOK_AFTER_DEPLOY hook), instead of flipping immediately from the GUI/console. Only meaningful while status=ready; cleared on any status transition away from ready (flip, abort, or a fresh rebuild superseding it)."/>
+
+        <column name="live_index_name" type="VARCHAR" size="255" required="false" description="The physical index this rollout considered live at BUILDING start."/>
+        <column name="target_index_name" type="VARCHAR" size="255" required="false" description="Set once BUILDING creates the target index."/>
+        <column name="mirror_queue_name" type="VARCHAR" size="255" required="false" description="Set for the lifetime of BUILDING/READY, unset (and the queue deleted) once FLIPPED/ABORTED."/>
+
+        <column name="mapping_diff_classification" type="VARCHAR" size="16" required="false" description="SearchIndexAliasConfig::MAPPING_DIFF_* -- additive, breaking, or none. Set once, at BUILDING start, by MappingDiffClassifier -- see README for why misclassifying this is a silent, permanent-damage risk."/>
+        <column name="mapping_diff_added_fields" type="LONGVARCHAR" required="false" description="JSON array of added field paths."/>
+        <column name="mapping_diff_breaking_fields" type="LONGVARCHAR" required="false" description="JSON array of retyped/removed field paths."/>
+
+        <column name="expected_document_count" type="INTEGER" required="false" description="Set once BUILDING's bulk load completes -- the count the mirror-queue-drain convergence loop targets."/>
+        <column name="actual_document_count" type="INTEGER" required="false"/>
+
+        <column name="started_at" type="TIMESTAMP" required="false"/>
+        <column name="finished_at" type="TIMESTAMP" required="false" description="Set on any terminal status (flipped, aborted, failed)."/>
+        <column name="triggered_by_user" type="VARCHAR" size="255" required="false" description="Zed username/email for a GUI-triggered rollout, or a fixed marker (e.g. 'console', 'cron') for a non-interactive one. Null for a rollout the installer plugin created during setup."/>
+        <column name="outcome" type="VARCHAR" size="255" required="false" description="Short human-readable summary, e.g. flipped to the new index, or aborted: mapping diff classified as breaking. Distinct from status (a fixed enum) and failure_reason (full error detail) -- this is what a history table row shows at a glance."/>
+        <column name="failure_reason" type="LONGVARCHAR" required="false"/>
+
+        <!--
+            Concurrency guard, enforced by the database, not just application code: while a rollout is
+            non-terminal, this column holds "{source_identifier}:{store_name}"; a real UNIQUE index on it
+            then makes a second concurrent rollout for the same scope a constraint violation, not a race
+            the application has to detect itself. Set back to NULL on any terminal status — MySQL's
+            UNIQUE index treats NULLs as distinct from each other, so any number of terminal (or
+            not-yet-started) rows can coexist, only ONE non-terminal row per scope ever can.
+        -->
+        <column name="active_scope_key" type="VARCHAR" size="192" required="false"/>
+
+        <behavior name="timestampable"/>
+        <id-method-parameter value="spy_search_index_rollout_pk_seq"/>
+
+        <unique name="unique-spy_search_index_rollout-active_scope_key">
+            <unique-column name="active_scope_key"/>
+        </unique>
+
+        <index name="index-spy_search_index_rollout-scope">
+            <index-column name="source_identifier"/>
+            <index-column name="store_name"/>
+        </index>
+
+        <index name="index-spy_search_index_rollout-status">
+            <index-column name="status"/>
+        </index>
+    </table>
+
+    <!--
+        A scope's "flip this already-existing physical index the next time deploy-flip runs" intent,
+        the rollback counterpart to spy_search_index_rollout.flip_pending. Kept as its own table rather
+        than a column on spy_search_index_rollout because a rollback target is an old, already-terminal
+        physical index with no active rollout row at all (see AliasRollback's own doc block: a rollout
+        row is only ever created once switchAlias() is actually attempted, never merely to record intent),
+        so there is nothing to hang a boolean flag off of. A row existing here IS the flag; deleting it
+        (on unmark, or once deploy-flip has attempted the rollback) is how it's cleared. Mutually
+        exclusive with flip_pending for the same scope, enforced in the Business layer
+        (PendingRollbackTargetManager / RolloutFinisher), not here.
+    -->
+    <table name="spy_search_index_deploy_rollback_target" idMethod="native" identifierQuoting="true">
+        <column name="id_search_index_deploy_rollback_target" type="INTEGER" required="true" autoIncrement="true" primaryKey="true"/>
+        <column name="source_identifier" type="VARCHAR" size="128" required="true"/>
+        <column name="store_name" type="VARCHAR" size="64" required="true"/>
+        <column name="alias_name" type="VARCHAR" size="255" required="true" description="Denormalized copy of the scope's canonical alias name, same rationale as spy_search_index_rollout's own column: avoids re-deriving it from (source_identifier, store_name) for display."/>
+        <column name="target_index_name" type="VARCHAR" size="255" required="true" description="The already-existing physical index to atomically switch the alias to on the next deploy-flip run."/>
+        <column name="triggered_by_user" type="VARCHAR" size="255" required="false"/>
+
+        <behavior name="timestampable"/>
+        <id-method-parameter value="spy_search_index_deploy_rollback_target_pk_seq"/>
+
+        <unique name="unique-spy_search_index_deploy_rollback_target-scope">
+            <unique-column name="source_identifier"/>
+            <unique-column name="store_name"/>
+        </unique>
+    </table>
+
+</database>
