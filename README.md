@@ -1,5 +1,10 @@
 # Spryker Search Index Alias
 
+[![CI](https://github.com/andrebarthelmeshellmuth/spryker-search-index-alias/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andrebarthelmeshellmuth/spryker-search-index-alias/actions/workflows/ci.yml)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A5%208.3-777bb4)](composer.json)
+[![PHPStan](https://img.shields.io/badge/PHPStan-level%208-2a6b2a)](phpstan.neon)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Zed-driven blue/green search indices behind aliases: rebuild a search index in the background, verify
 it, then flip to it atomically — zero downtime, including on first adoption of an existing installation.
 
