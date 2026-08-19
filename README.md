@@ -261,6 +261,12 @@ pickers on every load, regardless of the current filter — it's exactly what
 `search-index-alias:deploy-flip --dry-run` would report, so you can always see what the next deploy would
 flip before it happens.
 
+![The Overview page for the "page" source / DE store scope: source/store pickers, the Rebuild action bar with its "Optimize for large bulk load" checkbox, and one row per physical index showing current-alias/status/doc-count/mapping-diff plus per-row Flip/Roll-back/Delete actions](docs/screenshots/overview-page.png)
+
+![The History page: a pure read-only audit log of every past rollout event for a scope, showing started/finished timestamps, status, who triggered it, the target index, expected-vs-actual doc counts, and a plain-English outcome for each row](docs/screenshots/history-page.png)
+
+![A ready rollout flagged "for next deploy": the cross-scope Pending deploy flips panel above the filter lists it, the active-rollout line carries a "flagged for next deploy" badge, and the action bar shows Flip (immediate) alongside Unflag (cancel the flag) instead of a plain Flip-only bar](docs/screenshots/deploy-flip.png)
+
 ## Deploying
 
 A blue-green rebuild is deliberately decoupled from the flip: you can rebuild and verify a target index
