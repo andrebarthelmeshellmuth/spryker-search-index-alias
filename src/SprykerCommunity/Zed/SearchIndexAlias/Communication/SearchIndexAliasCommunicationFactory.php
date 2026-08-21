@@ -80,12 +80,17 @@ class SearchIndexAliasCommunicationFactory extends AbstractCommunicationFactory
      */
     public function createQueueClient(): SearchIndexAliasToQueueClientInterface
     {
-        return new SearchIndexAliasToQueueClientBridge(new QueueClient());
+        return new SearchIndexAliasToQueueClientBridge($this->createSprykerQueueClient());
     }
 
     protected function createSearchElasticsearchConfig(): SearchElasticsearchConfig
     {
         return new SearchElasticsearchConfig();
+    }
+
+    protected function createSprykerQueueClient(): QueueClient
+    {
+        return new QueueClient();
     }
 
     protected function createGuzzleClient(): GuzzleClient
