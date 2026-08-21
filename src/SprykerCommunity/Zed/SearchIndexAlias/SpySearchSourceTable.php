@@ -14,6 +14,14 @@ namespace SprykerCommunity\Zed\SearchIndexAlias;
  * document (see `SearchIndexAliasConfig::getSpySearchSourceTables()`). Plain config value object, not a
  * Propel model -- the bulk loader reads it with a raw connection since the table name is only known at
  * runtime, from config, not at compile time.
+ *
+ * Lives at the module root next to `SearchIndexAliasConfig`, not under `Business/BulkLoad/` where its only
+ * internal consumer (`BulkLoader`) sits -- it's part of `getSpySearchSourceTables()`'s own public return
+ * type, and that method MUST be overridden per project. Keeping it beside `Config` means a project's
+ * override only ever needs a single module-root import to construct one, not a deep import into the
+ * Business subtree for what is, from a project's point of view, purely a config-construction concern --
+ * the same convention core Spryker itself uses for value objects that are part of a `*Config` class's
+ * public signature.
  */
 class SpySearchSourceTable
 {

@@ -11,6 +11,10 @@ namespace SprykerCommunity\Zed\SearchIndexAlias\Business\Client;
 
 use Elastica\Client;
 
+/**
+ * @see \SprykerCommunity\Zed\SearchIndexAlias\Business\Client\ElasticaClientProvider for why this exists
+ * instead of going through the Client-layer `Client\Search`/`Client\Catalog` facades.
+ */
 interface ElasticaClientProviderInterface
 {
     public function getClient(): Client;
