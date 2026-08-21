@@ -461,8 +461,8 @@ php tests/_ci-standalone/generate-transfers.php
 vendor/bin/codecept run -c tests/codeception.portable.yml -g Portable
 ```
 
-**167 tests, 322 assertions** in the full Zed suite (44 of those are `Portable` and also run standalone,
-see above; the other 108 need `NeedsDatabase`/`NeedsSearch`/`NeedsBroker`/`NeedsProject`) covering nearly
+**173 tests, 337 assertions** in the full Zed suite (44 of those are `Portable` and also run standalone,
+see above; the other 129 need `NeedsDatabase`/`NeedsSearch`/`NeedsBroker`/`NeedsProject`) covering nearly
 every Business-layer class, two representative Communication forms, the
 `search-index-alias:check-installation` console command (including the back-office access diagnostic, see
 "Restricting access" above), and one controller's pure redirect-guard logic — all against real
