@@ -48,10 +48,10 @@ class DeployFlagController extends AbstractScopeController
     {
         $aliasScopeForm = $this->getFactory()->createAliasScopeForm('')->handleRequest($request);
 
-        if (!$aliasScopeForm->isSubmitted() || !$aliasScopeForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($aliasScopeForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $aliasScopeFormData = $aliasScopeForm->getData();
@@ -59,12 +59,10 @@ class DeployFlagController extends AbstractScopeController
         $aliasName = $aliasScopeFormData[AliasScopeForm::FIELD_ALIAS_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$aliasScopeFormData[AliasScopeForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         $searchIndexRolloutTransfer = $this->getFacade()->getActiveRollout($searchIndexScopeTransfer);
@@ -116,10 +114,10 @@ class DeployFlagController extends AbstractScopeController
     {
         $rollbackForm = $this->getFactory()->createRollbackForm('', '')->handleRequest($request);
 
-        if (!$rollbackForm->isSubmitted() || !$rollbackForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($rollbackForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $rollbackFormData = $rollbackForm->getData();
@@ -129,12 +127,10 @@ class DeployFlagController extends AbstractScopeController
         $targetIndexName = $rollbackFormData[RollbackForm::FIELD_TARGET_INDEX_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$rollbackFormData[RollbackForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         if (!$pending) {

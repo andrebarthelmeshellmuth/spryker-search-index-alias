@@ -11,6 +11,8 @@ namespace SprykerCommunity\Zed\SearchIndexAlias\Communication\Controller;
 
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
 use Spryker\Zed\Kernel\Communication\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
  * @method \SprykerCommunity\Zed\SearchIndexAlias\Communication\SearchIndexAliasCommunicationFactory getFactory()
@@ -35,6 +37,41 @@ abstract class AbstractScopeController extends AbstractController
         }
 
         return null;
+    }
+
+    /**
+     * Every scope-acting form in this package (adopt/rebuild/flip/abort/rollback/flag-toggle) is CSRF-only
+     * -- no real field validation beyond that -- so "submitted and valid" failing always means the same
+     * thing: bounce back to the index with the same error message.
+     *
+     * @param \Symfony\Component\Form\FormInterface $form
+     */
+    protected function requireValidForm(FormInterface $form): ?RedirectResponse
+    {
+        if ($form->isSubmitted() && $form->isValid()) {
+            return null;
+        }
+
+        $this->addErrorMessage('CSRF token is not valid.');
+
+        return $this->redirectResponse(static::URL_INDEX);
+    }
+
+    /**
+     * @param string $aliasName
+     * @param string $redirectUrl
+     */
+    protected function resolveScopeOrRedirect(string $aliasName, string $redirectUrl): SearchIndexScopeTransfer|RedirectResponse
+    {
+        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+
+        if ($searchIndexScopeTransfer !== null) {
+            return $searchIndexScopeTransfer;
+        }
+
+        $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
+
+        return $this->redirectResponse($redirectUrl);
     }
 
     /**

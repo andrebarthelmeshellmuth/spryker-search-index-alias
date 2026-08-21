@@ -30,10 +30,10 @@ class RolloutController extends AbstractScopeController
     {
         $aliasScopeForm = $this->getFactory()->createAliasScopeForm('')->handleRequest($request);
 
-        if (!$aliasScopeForm->isSubmitted() || !$aliasScopeForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($aliasScopeForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $aliasScopeFormData = $aliasScopeForm->getData();
@@ -41,12 +41,10 @@ class RolloutController extends AbstractScopeController
         $aliasName = $aliasScopeFormData[AliasScopeForm::FIELD_ALIAS_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$aliasScopeFormData[AliasScopeForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         if (!$this->getFacade()->needsAdoption($searchIndexScopeTransfer)) {
@@ -72,10 +70,10 @@ class RolloutController extends AbstractScopeController
     {
         $rebuildForm = $this->getFactory()->createRebuildForm('')->handleRequest($request);
 
-        if (!$rebuildForm->isSubmitted() || !$rebuildForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($rebuildForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $rebuildFormData = $rebuildForm->getData();
@@ -84,12 +82,10 @@ class RolloutController extends AbstractScopeController
         $optimizeForBulkLoad = (bool)$rebuildFormData[RebuildForm::FIELD_OPTIMIZE_FOR_BULK_LOAD];
         $redirectUrl = $this->resolveRedirectUrl((string)$rebuildFormData[RebuildForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         try {
@@ -117,10 +113,10 @@ class RolloutController extends AbstractScopeController
     {
         $aliasScopeForm = $this->getFactory()->createAliasScopeForm('')->handleRequest($request);
 
-        if (!$aliasScopeForm->isSubmitted() || !$aliasScopeForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($aliasScopeForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $aliasScopeFormData = $aliasScopeForm->getData();
@@ -128,12 +124,10 @@ class RolloutController extends AbstractScopeController
         $aliasName = $aliasScopeFormData[AliasScopeForm::FIELD_ALIAS_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$aliasScopeFormData[AliasScopeForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         $searchIndexRolloutTransfer = $this->getFacade()->getActiveRollout($searchIndexScopeTransfer);
@@ -164,10 +158,10 @@ class RolloutController extends AbstractScopeController
     {
         $abortForm = $this->getFactory()->createAbortForm('')->handleRequest($request);
 
-        if (!$abortForm->isSubmitted() || !$abortForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($abortForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $abortFormData = $abortForm->getData();
@@ -177,12 +171,10 @@ class RolloutController extends AbstractScopeController
         $reason = $abortFormData[AbortForm::FIELD_REASON];
         $redirectUrl = $this->resolveRedirectUrl((string)$abortFormData[AbortForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         $searchIndexRolloutTransfer = $this->getFacade()->getActiveRollout($searchIndexScopeTransfer);
@@ -213,10 +205,10 @@ class RolloutController extends AbstractScopeController
     {
         $rollbackForm = $this->getFactory()->createRollbackForm('', '')->handleRequest($request);
 
-        if (!$rollbackForm->isSubmitted() || !$rollbackForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($rollbackForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $rollbackFormData = $rollbackForm->getData();
@@ -226,12 +218,10 @@ class RolloutController extends AbstractScopeController
         $targetIndexName = $rollbackFormData[RollbackForm::FIELD_TARGET_INDEX_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$rollbackFormData[RollbackForm::FIELD_REDIRECT_TO]);
 
-        $searchIndexScopeTransfer = $this->findScopeByAlias($aliasName);
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
 
-        if ($searchIndexScopeTransfer === null) {
-            $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
-
-            return $this->redirectResponse($redirectUrl);
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
         }
 
         try {
@@ -260,10 +250,10 @@ class RolloutController extends AbstractScopeController
     {
         $deleteIndexForm = $this->getFactory()->createDeleteIndexForm('', '')->handleRequest($request);
 
-        if (!$deleteIndexForm->isSubmitted() || !$deleteIndexForm->isValid()) {
-            $this->addErrorMessage('CSRF token is not valid.');
+        $redirectResponse = $this->requireValidForm($deleteIndexForm);
 
-            return $this->redirectResponse(static::URL_INDEX);
+        if ($redirectResponse !== null) {
+            return $redirectResponse;
         }
 
         $deleteIndexFormData = $deleteIndexForm->getData();
