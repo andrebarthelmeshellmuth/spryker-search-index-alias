@@ -151,7 +151,8 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      */
     public function flip(SearchIndexRolloutTransfer $searchIndexRolloutTransfer): SearchIndexRolloutTransfer
     {
-        $aliasName = $searchIndexRolloutTransfer->getSearchIndexScopeOrFail()->getAliasNameOrFail();
+        $searchIndexScopeTransfer = $searchIndexRolloutTransfer->getSearchIndexScopeOrFail();
+        $aliasName = $searchIndexScopeTransfer->getAliasNameOrFail();
         $liveIndexName = $searchIndexRolloutTransfer->getLiveIndexNameOrFail();
         $targetIndexName = $searchIndexRolloutTransfer->getTargetIndexNameOrFail();
         $mirrorQueueName = $searchIndexRolloutTransfer->getMirrorQueueNameOrFail();
@@ -161,7 +162,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
             // instant is still sitting in the mirror queue, since the source of truth was never the
             // live index -- this is what makes the flip below safe to make atomic and instant rather
             // than needing its own quiesce window.
-            $this->mirrorQueueDrain->drain($mirrorQueueName, $targetIndexName);
+            $this->mirrorQueueDrain->drain($mirrorQueueName, $targetIndexName, $searchIndexScopeTransfer->getStoreNameOrFail());
 
             $this->aliasManager->switchAlias($aliasName, $liveIndexName, $targetIndexName);
             $this->mirrorQueueBinder->unbind($mirrorQueueName);
@@ -248,7 +249,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
                 $bulkLoadSettingsToRestore = null;
             }
 
-            $this->drainUntilConverged($mirrorQueueName, $targetIndexName);
+            $this->drainUntilConverged($mirrorQueueName, $targetIndexName, $searchIndexScopeTransfer->getStoreNameOrFail());
 
             $actualDocumentCount = $this->indexCloner->getDocumentCount($targetIndexName);
             $searchIndexRolloutTransfer = $this->rolloutFinisher->markReady($searchIndexRolloutTransfer, $targetIndexName, $actualDocumentCount);
@@ -321,13 +322,14 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
     /**
      * @param string $mirrorQueueName
      * @param string $targetIndexName
+     * @param string $storeName
      *
      * @throws \RuntimeException
      */
-    protected function drainUntilConverged(string $mirrorQueueName, string $targetIndexName): void
+    protected function drainUntilConverged(string $mirrorQueueName, string $targetIndexName, string $storeName): void
     {
         for ($pass = 1; $pass <= static::MAX_DRAIN_PASSES; $pass++) {
-            $drainedCount = $this->mirrorQueueDrain->drain($mirrorQueueName, $targetIndexName);
+            $drainedCount = $this->mirrorQueueDrain->drain($mirrorQueueName, $targetIndexName, $storeName);
 
             if ($drainedCount === 0) {
                 return;

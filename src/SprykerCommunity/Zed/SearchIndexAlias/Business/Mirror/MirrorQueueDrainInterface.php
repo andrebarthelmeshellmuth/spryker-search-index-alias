@@ -19,10 +19,13 @@ interface MirrorQueueDrainInterface
      *
      * @param string $mirrorQueueName
      * @param string $targetIndexName
+     * @param string $storeName Only messages carrying this store (see class doc block) are applied --
+     *  everything else on the queue is acknowledged and discarded, not left behind for a later scope to
+     *  pick up (there is no "later scope" for a message that was never meant for this rebuild at all).
      *
      * @return int Number of messages drained (0 means the queue was empty at the moment of this call --
      *  the caller's signal that convergence may have been reached, though a message published after this
      *  call returns is still possible and must be caught by a subsequent drain).
      */
-    public function drain(string $mirrorQueueName, string $targetIndexName): int;
+    public function drain(string $mirrorQueueName, string $targetIndexName, string $storeName): int;
 }

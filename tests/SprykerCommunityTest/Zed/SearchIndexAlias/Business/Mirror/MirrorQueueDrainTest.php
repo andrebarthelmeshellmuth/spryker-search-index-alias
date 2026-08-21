@@ -77,7 +77,7 @@ class MirrorQueueDrainTest extends Unit
             'write' => ['key' => 'sku-1', 'value' => ['name' => 'Widget'], 'store' => 'DE'],
         ]);
 
-        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName);
+        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
         $this->assertSame(1, $drainedCount);
         $document = $this->elasticaClient->getIndex($targetIndexName)->getDocument('sku-1');
@@ -97,7 +97,7 @@ class MirrorQueueDrainTest extends Unit
             'delete' => ['key' => 'sku-2'],
         ]);
 
-        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName);
+        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
         $this->assertSame(1, $drainedCount);
         $this->assertFalse($this->documentExists($targetIndexName, 'sku-2'));
@@ -115,10 +115,25 @@ class MirrorQueueDrainTest extends Unit
             'delete' => ['key' => 'sku-3'],
         ], declareQueue: false);
 
-        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName);
+        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
         $this->assertSame(2, $drainedCount);
         $this->assertFalse($this->documentExists($targetIndexName, 'sku-3'));
+    }
+
+    public function testDrainAcknowledgesButDiscardsAMessageBelongingToAnotherStore(): void
+    {
+        $queueName = static::TEST_PREFIX . 'other-store';
+        $targetIndexName = static::TEST_PREFIX . 'index5';
+        $this->elasticaClient->getIndex($targetIndexName)->create();
+        $this->declareAndPublish($queueName, [
+            'write' => ['key' => 'sku-5', 'value' => ['name' => 'AtOnly'], 'store' => 'AT'],
+        ]);
+
+        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
+
+        $this->assertSame(1, $drainedCount);
+        $this->assertFalse($this->documentExists($targetIndexName, 'sku-5'));
     }
 
     public function testDrainReturnsZeroForAnEmptyQueueAndDoesNotTouchTheTargetIndex(): void
@@ -128,7 +143,7 @@ class MirrorQueueDrainTest extends Unit
         $this->elasticaClient->getIndex($targetIndexName)->create();
         $this->declareQueue($queueName);
 
-        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName);
+        $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
         $this->assertSame(0, $drainedCount);
     }

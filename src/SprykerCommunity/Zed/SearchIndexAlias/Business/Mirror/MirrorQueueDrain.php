@@ -27,6 +27,19 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Client\ElasticaClientProvider
  * / `QueueMessageCreator` source -- `value` is already the fully rendered document body (the exact same
  * shape as `spy_*_search.data`), and `key` is the same stable ID BulkLoader writes as `_id`, so a write
  * drained here correctly overwrites (never duplicates) what the bulk load already wrote.
+ *
+ * The mirror queue's binding (see `MirrorQueueBinder`) is scoped by sourceIdentifier only, not by store --
+ * core's `sync.search.<sourceIdentifier>` exchange (e.g. `sync.search.product`) carries every store's
+ * writes for that sourceIdentifier, and the binding uses an empty routing key, so this queue receives
+ * every store's traffic, not just the scope being rebuilt. `applyDeduplicated()` filters by the message's
+ * own `store` field (present when Dynamic Store Mode is on -- see `SynchronizationSearch::STORE`) against
+ * the scope's store before writing anything, so cross-store messages are drained (acknowledged, so they
+ * don't pile up) but never applied to the wrong target index. A message with no `store` field at all
+ * (Dynamic Store Mode off, i.e. a genuinely single-store install) is always applied -- there is no other
+ * store it could belong to. Store, not locale, is the scoping unit -- `SynchronizationSearch`'s sync
+ * payload and `CanonicalIndexNameResolver`'s index naming both operate on (store, sourceIdentifier) only;
+ * a store with multiple locales keeps every locale's documents in the same index/queue (locale lives
+ * inside each document's fields), not in a separate physical index or queue.
  */
 class MirrorQueueDrain implements MirrorQueueDrainInterface
 {
@@ -39,6 +52,11 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
      * @var string
      */
     protected const TYPE_DELETE = 'delete';
+
+    /**
+     * @var string
+     */
+    protected const STORE = 'store';
 
     /**
      * Safety bound on one drain pass -- a scope receiving genuinely more than this many writes between
@@ -63,8 +81,9 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
     /**
      * @param string $mirrorQueueName
      * @param string $targetIndexName
+     * @param string $storeName
      */
-    public function drain(string $mirrorQueueName, string $targetIndexName): int
+    public function drain(string $mirrorQueueName, string $targetIndexName, string $storeName): int
     {
         $connection = $this->brokerConnectionProvider->getConnection();
         $channel = $connection->channel();
@@ -76,7 +95,7 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
                 return 0;
             }
 
-            $this->applyDeduplicated($messages, $targetIndexName);
+            $this->applyDeduplicated($messages, $targetIndexName, $storeName);
             $this->acknowledge($channel, $deliveryTags);
 
             return count($messages);
@@ -124,10 +143,11 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
      *
      * @param array<int, array<string, mixed>> $messages
      * @param string $targetIndexName
+     * @param string $storeName
      */
-    protected function applyDeduplicated(array $messages, string $targetIndexName): void
+    protected function applyDeduplicated(array $messages, string $targetIndexName, string $storeName): void
     {
-        [$documentsToWrite, $idsToDelete] = $this->partitionLatestByKey($messages);
+        [$documentsToWrite, $idsToDelete] = $this->partitionLatestByKey($messages, $storeName);
 
         if ($documentsToWrite === [] && $idsToDelete === []) {
             return;
@@ -151,17 +171,18 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
      * index directly.
      *
      * @param array<int, array<string, mixed>> $messages
+     * @param string $storeName
      *
      * @return array{0: array<int, \Elastica\Document>, 1: array<int, string>}
      */
-    protected function partitionLatestByKey(array $messages): array
+    protected function partitionLatestByKey(array $messages, string $storeName): array
     {
         $latestByKey = [];
 
         foreach ($messages as $message) {
-            if (isset($message[static::TYPE_WRITE]['key'])) {
+            if (isset($message[static::TYPE_WRITE]['key']) && $this->belongsToStore($message[static::TYPE_WRITE], $storeName)) {
                 $latestByKey[$message[static::TYPE_WRITE]['key']] = [static::TYPE_WRITE, $message[static::TYPE_WRITE]];
-            } elseif (isset($message[static::TYPE_DELETE]['key'])) {
+            } elseif (isset($message[static::TYPE_DELETE]['key']) && $this->belongsToStore($message[static::TYPE_DELETE], $storeName)) {
                 $latestByKey[$message[static::TYPE_DELETE]['key']] = [static::TYPE_DELETE, $message[static::TYPE_DELETE]];
             }
         }
@@ -180,6 +201,24 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
         }
 
         return [$documentsToWrite, $idsToDelete];
+    }
+
+    /**
+     * The mirror queue's exchange binding is shared across every store publishing to the same
+     * sourceIdentifier (see class doc block) -- this is the actual scoping, applied per message rather
+     * than at the broker level. A message with no `store` key at all is a Dynamic Store Mode OFF payload
+     * (single-store install), which always belongs.
+     *
+     * @param array<string, mixed> $payload
+     * @param string $storeName
+     */
+    protected function belongsToStore(array $payload, string $storeName): bool
+    {
+        if (!isset($payload[static::STORE])) {
+            return true;
+        }
+
+        return $payload[static::STORE] === $storeName;
     }
 
     /**
