@@ -40,6 +40,16 @@ with zero cleanup on the live side.
    queue and replayed onto the target afterward, deduplicated last-write-wins. The live index is never
    touched by any of this.
 
+   Core's `sync.search.<sourceIdentifier>` exchange (e.g. `sync.search.product`) is shared by every store
+   publishing that sourceIdentifier — a multi-store install's mirror queue therefore receives every
+   store's writes, not just the scope being rebuilt. The drain step filters each message by its own
+   `store` field (present when Dynamic Store Mode is on) against the scope's store before applying
+   anything, so a DE rebuild never picks up AT's concurrent writes, or vice versa — cross-store messages
+   are still acknowledged off the queue, just discarded rather than applied. (Store, not locale, is the
+   scoping unit here because that's what core's own sync payload and index-naming scheme use — a store
+   with multiple locales keeps every locale's documents in the same index/queue, distinguished by
+   locale-specific fields inside each document, not by a separate physical index or queue.)
+
 3. **Flip** (`search-index-alias:flip`, or automatic — see `isAutoFlipEnabled()`). One final mirror-queue
    drain pass to catch anything published since the rebuild reached `ready`, then a single atomic
    `_aliases` call switches the alias from the old physical index to the new one. Verified live against
@@ -125,7 +135,7 @@ composer require spryker-community/search-index-alias
    package's own `<pages>` children into your nested copy: with both sides populated,
    `array_merge_recursive` collides on every duplicate leaf value (same key, same string) and turns it
    into an array, crashing `@Gui/Partials/navigation.twig` with `Twig\Error\RuntimeError: ... ("Array to
-   string conversion")`. `search-index-alias:check-installation` (step 8 below) recognizes both the full
+   string conversion")`. `search-index-alias:check-installation` (step 9 below) recognizes both the full
    and the childless copy as valid, so it won't false-flag a correctly-nested childless entry as missing.
 
 5. **Configure which sourceIdentifiers this package can rebuild** (see below) — without this step,
@@ -150,8 +160,49 @@ composer require spryker-community/search-index-alias
    Every string in the Overview and History pages falls back to its own raw English text if untranslated,
    so skipping this step is never a hard failure — only a missing `de_DE` (or other locale) translation.
 
-7. **Run the rebuild worker.** Rebuilds triggered from the Zed GUI are dispatched onto a dedicated RabbitMQ
-   queue and only actually run once something is consuming it — without a worker running, a GUI "Rebuild"
+7. **Route the rebuild-request queue through RabbitMQ.** `RebuildRequestPublisher`/`RebuildRequestConsumer`
+   (the GUI-triggered async rebuild path — see step 8) go through Spryker's own `Client\Queue`
+   (`spryker/queue`), not a raw AMQP connection. `Client\Queue` picks an adapter per queue name purely from
+   project config (`QueueConstants::QUEUE_ADAPTER_CONFIGURATION`) — **skipping this step is a SILENT
+   failure**, not an error: the queue name falls through to whatever your project's
+   `QUEUE_ADAPTER_CONFIGURATION_DEFAULT` is (in a project running `spryker/symfony-messenger` as its
+   default transport, that's `SymfonyMessengerQueueAdapter`, not RabbitMQ), and every GUI-triggered rebuild
+   silently vanishes instead of ever reaching `RebuildRequestConsumer` — no exception, no log, the rollout
+   just sits in `building` forever with nothing to explain why. Confirmed live during this package's own
+   development. Two registrations, both required:
+   ```php
+   // config/Shared/config_default.php — routes the queue NAME to the RabbitMQ adapter
+   use Spryker\Client\RabbitMq\Model\RabbitMqAdapter;
+   use Spryker\Shared\Queue\QueueConfig;
+   use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
+
+   $config[QueueConstants::QUEUE_ADAPTER_CONFIGURATION][SearchIndexAliasConfig::REBUILD_REQUEST_QUEUE_NAME] = [
+       QueueConfig::CONFIG_QUEUE_ADAPTER => RabbitMqAdapter::class,
+   ];
+   ```
+   ```php
+   // src/Pyz/Client/RabbitMq/RabbitMqConfig.php — declares the underlying exchange/queue on the broker,
+   // same pattern every other simple entry in your project's own getQueueConfiguration() already uses
+   use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
+
+   protected function getQueueConfiguration(): array
+   {
+       return array_merge(
+           // ...your project's existing entries...
+           [SearchIndexAliasConfig::REBUILD_REQUEST_QUEUE_NAME],
+       );
+   }
+   ```
+   Then materialize it on the broker:
+   ```
+   vendor/bin/console queue:setup
+   ```
+   `search-index-alias:check-installation` (step 9) round-trips a real probe message through this exact
+   path and will fail loudly if either registration is missing — run it after this step, not just at the
+   end, if you want to isolate a problem here specifically.
+
+8. **Run the rebuild worker.** Rebuilds triggered from the Zed GUI are dispatched onto the queue configured
+   above and only actually run once something is consuming it — without a worker running, a GUI "Rebuild"
    click will report a rollout was requested and then sit in `building` forever. Run it the same way you'd
    run any other long-lived queue consumer in this project (e.g. alongside `queue:worker:start`):
    ```
@@ -160,10 +211,13 @@ composer require spryker-community/search-index-alias
    The console-triggered `search-index-alias:rebuild` command is unaffected — it always runs synchronously
    and does not need the worker.
 
-8. Verify everything:
+9. Verify everything:
    ```
    vendor/bin/console search-index-alias:check-installation
    ```
+   Among other things, this round-trips a real message through the rebuild-request queue via `Client\Queue`
+   (see step 7) — a green run here is real evidence the GUI-triggered rebuild path actually works end to
+   end, not just that the broker is reachable.
 
 ## Configuration
 
@@ -347,6 +401,14 @@ rule for these bundles to their role. Re-run `check-installation` afterward to c
 - Alias drift (an alias pointing at more than one physical index) is detected (`search-index-alias:health`)
   but never auto-repaired — deciding which of several aliased indices is correct needs a human, not a
   script.
+- Target index names are computed by `CanonicalIndexNameResolver`, a deliberate reimplementation of core's
+  `SourceIdentifier::translateToIndexName()` (an internal class of `search-elasticsearch`, not part of its
+  public facade contract) against the same `SearchElasticsearchConfig` a project already maintains — not a
+  dependency on that internal class. If a project overrides its own `SourceIdentifier`/index-naming logic
+  with materially different behavior (not just different config values), this resolver will silently
+  diverge from it and this package will build/adopt indices under the wrong name. Verified byte-identical
+  to core's own naming against this repo's live install as of 2026-08-15; re-verify after any project-level
+  override of that naming logic.
 
 ## Testing and CI
 

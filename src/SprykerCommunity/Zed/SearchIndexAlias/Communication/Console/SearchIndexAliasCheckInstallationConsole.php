@@ -11,6 +11,8 @@ namespace SprykerCommunity\Zed\SearchIndexAlias\Communication\Console;
 
 use DateTime;
 use FilesystemIterator;
+use Generated\Shared\Transfer\QueueSendMessageTransfer;
+use Generated\Shared\Transfer\RabbitMqConsumerOptionTransfer;
 use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexDeployRollbackTargetQuery;
 use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexRolloutQuery;
 use RecursiveDirectoryIterator;
@@ -44,7 +46,7 @@ class SearchIndexAliasCheckInstallationConsole extends Console
     /**
      * @var string
      */
-    public const COMMAND_DESCRIPTION = 'Diagnoses a search-index-alias installation: core namespace, sibling console commands, the Propel table, navigation, Elasticsearch/RabbitMQ reachability, whether every managed scope has rebuild config, back-office ACL access, the Zed translation catalog, and stale flip-pending flags.';
+    public const COMMAND_DESCRIPTION = 'Diagnoses a search-index-alias installation: core namespace, sibling console commands, the Propel table, navigation, Elasticsearch/RabbitMQ reachability, Client\Queue routing for the rebuild-request queue, whether every managed scope has rebuild config, back-office ACL access, the Zed translation catalog, and stale flip-pending flags.';
 
     /**
      * @var string
@@ -147,6 +149,7 @@ class SearchIndexAliasCheckInstallationConsole extends Console
         $this->checkNavigationRegistered($output);
         $this->checkElasticsearchReachable($output);
         $this->checkRabbitMqManagementApiReachable($output);
+        $this->checkRebuildRequestQueueReachable($output);
         $this->checkManagedScopesHaveRebuildConfig($output);
         $this->checkBackOfficeAccess($output);
         $this->checkZedTranslationRegistered($output);
@@ -383,6 +386,79 @@ class SearchIndexAliasCheckInstallationConsole extends Console
         }
 
         $output->writeln('<info>✓</info> the RabbitMQ Management HTTP API is reachable');
+    }
+
+    /**
+     * `RebuildRequestPublisher`/`RebuildRequestConsumer` go through `Client\Queue` (`spryker/queue`), NOT
+     * the raw AMQP connection the two checks above exercise -- a THIRD, independently-failing path.
+     * `Client\Queue` routes a queue name to an adapter purely by project config
+     * (`QueueConstants::QUEUE_ADAPTER_CONFIGURATION`, keyed by queue name); a project that installs this
+     * package without adding `SearchIndexAliasConfig::REBUILD_REQUEST_QUEUE_NAME` there falls through to
+     * whatever `QUEUE_ADAPTER_CONFIGURATION_DEFAULT` is (often `SymfonyMessengerQueueAdapter`, not
+     * RabbitMQ) -- confirmed live: the message is neither an error nor a warning anywhere, it is simply
+     * routed to the wrong transport and never seen again. A real send-then-receive-then-acknowledge round
+     * trip is the only way to catch this; a reachability ping alone would not, since the wrong adapter can
+     * itself be perfectly reachable. See README, "Installation", step on the rebuild-request queue.
+     *
+     * Necessarily probes the REAL `search-index-alias.rebuild-requests` queue, not a disposable one like
+     * the Management API check above -- `Client\Queue`'s adapter routing is keyed by the exact queue name,
+     * so a differently-named probe queue would never exercise the one config lookup this check exists to
+     * catch. Known false-failure mode this trades away: if a genuine rebuild request is already sitting at
+     * the head of the queue (e.g. this shop's lean dev environment, no worker consuming it -- see README),
+     * `basic_get` reads THAT message first, not our just-published probe, and this reports a mismatch even
+     * though routing is actually fine. That message is left unacknowledged (never our own probe -- see
+     * below), so nothing is lost; a repeat run once the real backlog drains will pass.
+     *
+     * @param \Symfony\Component\Console\Output\OutputInterface $output
+     */
+    protected function checkRebuildRequestQueueReachable(OutputInterface $output): void
+    {
+        $queueName = $this->getFactory()->getConfig()->getRebuildRequestQueueName();
+        $probeBody = sprintf('search-index-alias.check-installation.probe.%s', bin2hex(random_bytes(8)));
+
+        try {
+            $queueClient = $this->getFactory()->createQueueClient();
+            $queueClient->sendMessage($queueName, (new QueueSendMessageTransfer())->setBody($probeBody));
+
+            $queueReceiveMessageTransfer = $queueClient->receiveMessage($queueName, ['rabbitmq' => new RabbitMqConsumerOptionTransfer()]);
+            $receivedBody = $queueReceiveMessageTransfer->getQueueMessage()?->getBody();
+
+            // Only ever acknowledge (i.e. permanently remove) OUR OWN probe -- this is the real,
+            // shared production queue, not a disposable probe queue like the Management API check above
+            // uses. Anything else received here (a genuine queued rebuild request that happened to be
+            // sitting at the head of the queue) is deliberately left unacknowledged: it stays on the
+            // queue and gets redelivered to the real consumer once this connection closes below, rather
+            // than being silently swallowed by this diagnostic.
+            if ($receivedBody === $probeBody) {
+                $queueClient->acknowledge($queueReceiveMessageTransfer);
+            }
+        } catch (Throwable $throwable) {
+            $this->failures[] = sprintf(
+                'Could not round-trip a probe message through the "%s" queue via Client\Queue: %s',
+                $queueName,
+                $throwable->getMessage(),
+            );
+
+            return;
+        }
+
+        if ($receivedBody !== $probeBody) {
+            $this->failures[] = sprintf(
+                'The "%s" queue did not return the probe message this check just sent (got %s back). Most ' .
+                'likely Client\Queue is routing that queue name to the wrong adapter -- a missing entry in ' .
+                'this project\'s QueueConstants::QUEUE_ADAPTER_CONFIGURATION mapping ' .
+                'SearchIndexAliasConfig::REBUILD_REQUEST_QUEUE_NAME to the RabbitMQ adapter (see README, ' .
+                '"Installation"). Could also just mean a genuine rebuild request was already queued ahead ' .
+                'of the probe (e.g. no worker running) -- if so, that message was left unacknowledged and ' .
+                'a repeat run once the backlog drains should pass.',
+                $queueName,
+                $receivedBody === null ? 'nothing' : sprintf('"%s"', $receivedBody),
+            );
+
+            return;
+        }
+
+        $output->writeln(sprintf('<info>✓</info> the "%s" rebuild-request queue round-trips via Client\Queue', $queueName));
     }
 
     /**

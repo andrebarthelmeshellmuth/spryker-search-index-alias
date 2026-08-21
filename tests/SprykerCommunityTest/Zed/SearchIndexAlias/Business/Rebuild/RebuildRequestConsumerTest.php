@@ -13,11 +13,13 @@ use Codeception\Test\Unit;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
 use PhpAmqpLib\Message\AMQPMessage;
+use Spryker\Client\Queue\QueueClient;
 use Spryker\Client\RabbitMq\RabbitMqConfig;
 use SprykerCommunity\Shared\SearchIndexAlias\SearchIndexAliasConfig as SharedSearchIndexAliasConfig;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Broker\BrokerConnectionProvider;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildOrchestratorInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildRequestConsumer;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasEntityManager;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasRepository;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
@@ -45,11 +47,14 @@ class RebuildRequestConsumerTest extends Unit
 {
     protected BrokerConnectionProvider $brokerConnectionProvider;
 
+    protected SearchIndexAliasToQueueClientBridge $queueClient;
+
     protected SearchIndexAliasConfig $searchIndexAliasConfig;
 
     protected function _before(): void
     {
         $this->brokerConnectionProvider = new BrokerConnectionProvider(new RabbitMqConfig());
+        $this->queueClient = new SearchIndexAliasToQueueClientBridge(new QueueClient());
         $this->searchIndexAliasConfig = new SearchIndexAliasConfig();
     }
 
@@ -68,7 +73,7 @@ class RebuildRequestConsumerTest extends Unit
 
         $capturingOrchestrator = $this->createCapturingOrchestrator();
         $rebuildRequestConsumer = new RebuildRequestConsumer(
-            $this->brokerConnectionProvider,
+            $this->queueClient,
             $this->searchIndexAliasConfig,
             new SearchIndexAliasRepository(),
             $capturingOrchestrator,
@@ -104,7 +109,7 @@ class RebuildRequestConsumerTest extends Unit
 
         $capturingOrchestrator = $this->createCapturingOrchestrator();
         $rebuildRequestConsumer = new RebuildRequestConsumer(
-            $this->brokerConnectionProvider,
+            $this->queueClient,
             $this->searchIndexAliasConfig,
             new SearchIndexAliasRepository(),
             $capturingOrchestrator,
@@ -131,7 +136,7 @@ class RebuildRequestConsumerTest extends Unit
 
         $capturingOrchestrator = $this->createCapturingOrchestrator();
         $rebuildRequestConsumer = new RebuildRequestConsumer(
-            $this->brokerConnectionProvider,
+            $this->queueClient,
             $this->searchIndexAliasConfig,
             new SearchIndexAliasRepository(),
             $capturingOrchestrator,

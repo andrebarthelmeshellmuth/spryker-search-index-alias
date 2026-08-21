@@ -10,6 +10,7 @@ declare(strict_types = 1);
 namespace SprykerCommunity\Zed\SearchIndexAlias\Communication;
 
 use GuzzleHttp\Client as GuzzleClient;
+use Spryker\Client\Queue\QueueClient;
 use Spryker\Client\RabbitMq\RabbitMqConfig as ClientRabbitMqConfig;
 use Spryker\Zed\Kernel\Communication\AbstractCommunicationFactory;
 use Spryker\Zed\RabbitMq\RabbitMqConfig as ZedRabbitMqConfig;
@@ -26,6 +27,8 @@ use SprykerCommunity\Zed\SearchIndexAlias\Communication\Form\AliasScopeForm;
 use SprykerCommunity\Zed\SearchIndexAlias\Communication\Form\DeleteIndexForm;
 use SprykerCommunity\Zed\SearchIndexAlias\Communication\Form\RebuildForm;
 use SprykerCommunity\Zed\SearchIndexAlias\Communication\Form\RollbackForm;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientBridge;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToAclFacadeInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToTranslatorFacadeInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasDependencyProvider;
@@ -70,6 +73,14 @@ class SearchIndexAliasCommunicationFactory extends AbstractCommunicationFactory
             $this->createZedRabbitMqConfig(),
             $this->createBrokerConnectionProvider(),
         );
+    }
+
+    /**
+     * Same diagnostic-only duplication rationale as `createElasticaClientProvider()` above.
+     */
+    public function createQueueClient(): SearchIndexAliasToQueueClientInterface
+    {
+        return new SearchIndexAliasToQueueClientBridge(new QueueClient());
     }
 
     protected function createSearchElasticsearchConfig(): SearchElasticsearchConfig

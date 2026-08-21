@@ -11,6 +11,7 @@ namespace SprykerCommunity\Zed\SearchIndexAlias;
 
 use Spryker\Zed\Kernel\AbstractBundleDependencyProvider;
 use Spryker\Zed\Kernel\Container;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToAclFacadeBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToStoreFacadeBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToTranslatorFacadeBridge;
@@ -24,6 +25,19 @@ class SearchIndexAliasDependencyProvider extends AbstractBundleDependencyProvide
      * @var string
      */
     public const FACADE_STORE = 'FACADE_STORE';
+
+    /**
+     * `RebuildRequestPublisher`/`RebuildRequestConsumer`'s dedicated rebuild-request work queue --
+     * ordinary, permanent, single fixed name, exactly the shape `spryker/queue`'s `Client\Queue` is
+     * designed for (unlike this package's OTHER raw-AMQP uses, `MirrorQueueBinder`/`MirrorQueueDrain`,
+     * which need dynamic per-rollout exchange binding and high-volume `basic_get` draining that
+     * `Client\Queue`/the RabbitMQ Management API don't support -- see those classes' own doc blocks).
+     * Safe to call from Zed/console: `Client\Queue` never touches `Client\Store`/`Client\Locale`, so none
+     * of the session-dependent crash this shop hit with `Client\Catalog`/`Client\Search` applies here.
+     *
+     * @var string
+     */
+    public const CLIENT_QUEUE = 'CLIENT_QUEUE';
 
     /**
      * Communication-layer only -- used exclusively by `search-index-alias:check-installation` (see
@@ -55,6 +69,7 @@ class SearchIndexAliasDependencyProvider extends AbstractBundleDependencyProvide
     {
         $container = parent::provideBusinessLayerDependencies($container);
         $container = $this->addStoreFacade($container);
+        $container = $this->addQueueClient($container);
 
         return $this->addTargetIndexSettingsExpanderPlugins($container);
     }
@@ -77,6 +92,16 @@ class SearchIndexAliasDependencyProvider extends AbstractBundleDependencyProvide
     protected function addStoreFacade(Container $container): Container
     {
         $container->set(static::FACADE_STORE, fn (Container $container): SearchIndexAliasToStoreFacadeBridge => new SearchIndexAliasToStoreFacadeBridge($container->getLocator()->store()->facade()));
+
+        return $container;
+    }
+
+    /**
+     * @param \Spryker\Zed\Kernel\Container $container
+     */
+    protected function addQueueClient(Container $container): Container
+    {
+        $container->set(static::CLIENT_QUEUE, fn (Container $container): SearchIndexAliasToQueueClientBridge => new SearchIndexAliasToQueueClientBridge($container->getLocator()->queue()->client()));
 
         return $container;
     }

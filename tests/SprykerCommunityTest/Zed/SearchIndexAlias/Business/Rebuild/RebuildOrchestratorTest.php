@@ -14,6 +14,7 @@ use Elastica\Client as ElasticaClient;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
 use GuzzleHttp\Client as GuzzleClient;
 use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexRolloutQuery;
+use Spryker\Client\Queue\QueueClient;
 use Spryker\Client\RabbitMq\RabbitMqConfig as ClientRabbitMqConfig;
 use Spryker\Zed\RabbitMq\RabbitMqConfig;
 use Spryker\Zed\SearchElasticsearch\SearchElasticsearchConfig;
@@ -34,6 +35,7 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildRequestPublish
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutFinisher;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutGuard;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarter;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Plugin\TargetIndexSettingsExpanderPluginInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasEntityManager;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasRepository;
@@ -302,7 +304,7 @@ class RebuildOrchestratorTest extends Unit
             $mirrorQueueDrain,
             $this->aliasManager,
             $entityManager,
-            new RebuildRequestPublisher($this->brokerConnectionProvider, $searchIndexAliasConfig),
+            new RebuildRequestPublisher(new SearchIndexAliasToQueueClientBridge(new QueueClient()), $searchIndexAliasConfig),
             $isAutoFlipEnabled,
             $targetIndexSettingsExpanderPlugins,
         );

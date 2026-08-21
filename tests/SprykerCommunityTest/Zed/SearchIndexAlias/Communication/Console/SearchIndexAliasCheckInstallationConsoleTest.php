@@ -31,8 +31,13 @@ use Symfony\Component\Console\Tester\CommandTester;
  * to diagnose a REAL installation, a throwaway/mocked facade would prove nothing about whether the
  * project's own DependencyProvider/navigation.xml/config_default.php are actually wired. This demoshop is
  * expected to be fully wired (core namespace registered, navigation entries present, Elasticsearch and
- * the RabbitMQ Management API both reachable, the "page" scope has rebuild config, the Zed translation
- * catalog loaded and complete) -- asserted on accordingly.
+ * the RabbitMQ Management API both reachable, the rebuild-request queue round-trips via Client\Queue, the
+ * "page" scope has rebuild config, the Zed translation catalog loaded and complete) -- asserted on
+ * accordingly. The Client\Queue round trip can flake if this shop's `search-index-alias.rebuild-requests`
+ * queue genuinely has a real message sitting at its head (no worker running in this lean dev environment
+ * -- see `checkRebuildRequestQueueReachable()`'s own doc block) -- if this test starts failing only on
+ * that one assertion, drain the queue (`RebuildRequestConsumerTest::drainQueue()` has the recipe) rather
+ * than assuming the check itself regressed.
  *
  * @group SprykerCommunityTest
  * @group Zed
@@ -57,6 +62,7 @@ class SearchIndexAliasCheckInstallationConsoleTest extends Unit
         $this->assertStringContainsString('navigation entries are registered in config/Zed/navigation.xml', $commandTester->getDisplay());
         $this->assertStringContainsString('Elasticsearch/OpenSearch is reachable', $commandTester->getDisplay());
         $this->assertStringContainsString('the RabbitMQ Management HTTP API is reachable', $commandTester->getDisplay());
+        $this->assertStringContainsString('rebuild-request queue round-trips via Client\Queue', $commandTester->getDisplay());
         $this->assertStringContainsString('the Zed GUI translation catalog is loaded', $commandTester->getDisplay());
         $this->assertStringContainsString('all 49 Zed GUI strings are present in the translation catalog', $commandTester->getDisplay());
         $this->assertStringContainsString('Everything checkable from the CLI is in place.', $commandTester->getDisplay());

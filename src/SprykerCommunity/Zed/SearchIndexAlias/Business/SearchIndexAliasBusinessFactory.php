@@ -66,6 +66,7 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutGuard;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutGuardInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarter;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarterInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToStoreFacadeInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasDependencyProvider;
 
@@ -139,6 +140,11 @@ class SearchIndexAliasBusinessFactory extends AbstractBusinessFactory
     public function getStoreFacade(): SearchIndexAliasToStoreFacadeInterface
     {
         return $this->getProvidedDependency(SearchIndexAliasDependencyProvider::FACADE_STORE);
+    }
+
+    public function getQueueClient(): SearchIndexAliasToQueueClientInterface
+    {
+        return $this->getProvidedDependency(SearchIndexAliasDependencyProvider::CLIENT_QUEUE);
     }
 
     public function createRolloutGuard(): RolloutGuardInterface
@@ -246,13 +252,13 @@ class SearchIndexAliasBusinessFactory extends AbstractBusinessFactory
 
     public function createRebuildRequestPublisher(): RebuildRequestPublisherInterface
     {
-        return new RebuildRequestPublisher($this->createBrokerConnectionProvider(), $this->getConfig());
+        return new RebuildRequestPublisher($this->getQueueClient(), $this->getConfig());
     }
 
     public function createRebuildRequestConsumer(): RebuildRequestConsumerInterface
     {
         return new RebuildRequestConsumer(
-            $this->createBrokerConnectionProvider(),
+            $this->getQueueClient(),
             $this->getConfig(),
             $this->getRepository(),
             $this->createRebuildOrchestrator(),

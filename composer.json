@@ -21,6 +21,7 @@
         "spryker/acl": "^3.27.0",
         "spryker/kernel": "^3.86.0",
         "spryker/propel-orm": "^1.25.0",
+        "spryker/queue": "^1.29.1",
         "spryker/rabbit-mq": "^2.25.0",
         "spryker/search-elasticsearch": "^1.23.0",
         "spryker/store": "^1.37.0",

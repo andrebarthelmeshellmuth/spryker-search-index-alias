@@ -9,21 +9,22 @@ declare(strict_types = 1);
 
 namespace SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild;
 
+use Generated\Shared\Transfer\RabbitMqConsumerOptionTransfer;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
-use SprykerCommunity\Zed\SearchIndexAlias\Business\Broker\BrokerConnectionProviderInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasRepositoryInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
 
 class RebuildRequestConsumer implements RebuildRequestConsumerInterface
 {
     /**
-     * @param \SprykerCommunity\Zed\SearchIndexAlias\Business\Broker\BrokerConnectionProviderInterface $brokerConnectionProvider
+     * @param \SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientInterface $queueClient
      * @param \SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig $searchIndexAliasConfig
      * @param \SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasRepositoryInterface $searchIndexAliasRepository
      * @param \SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildOrchestratorInterface $rebuildOrchestrator
      */
     public function __construct(
-        protected BrokerConnectionProviderInterface $brokerConnectionProvider,
+        protected SearchIndexAliasToQueueClientInterface $queueClient,
         protected SearchIndexAliasConfig $searchIndexAliasConfig,
         protected SearchIndexAliasRepositoryInterface $searchIndexAliasRepository,
         protected RebuildOrchestratorInterface $rebuildOrchestrator,
@@ -32,32 +33,29 @@ class RebuildRequestConsumer implements RebuildRequestConsumerInterface
 
     public function consumeOne(): bool
     {
-        $queueName = $this->searchIndexAliasConfig->getRebuildRequestQueueName();
+        $queueReceiveMessageTransfer = $this->queueClient->receiveMessage(
+            $this->searchIndexAliasConfig->getRebuildRequestQueueName(),
+            // `noAck` deliberately left null (-> false): messages are only acknowledged below, after
+            // `processPayload()` has actually run, so a crash mid-processing leaves the message on the
+            // queue to be retried rather than silently lost.
+            ['rabbitmq' => new RabbitMqConsumerOptionTransfer()],
+        );
+        $queueSendMessageTransfer = $queueReceiveMessageTransfer->getQueueMessage();
+        $body = $queueSendMessageTransfer?->getBody();
 
-        $connection = $this->brokerConnectionProvider->getConnection();
-        $channel = $connection->channel();
-
-        try {
-            $channel->queue_declare($queueName, false, true, false, false);
-            $amqpMessage = $channel->basic_get($queueName, false);
-
-            if ($amqpMessage === null) {
-                return false;
-            }
-
-            $payload = json_decode($amqpMessage->getBody(), true);
-
-            if (is_array($payload)) {
-                $this->processPayload($payload);
-            }
-
-            $channel->basic_ack((int)$amqpMessage->getDeliveryTag());
-
-            return true;
-        } finally {
-            $channel->close();
-            $connection->close();
+        if ($body === null) {
+            return false;
         }
+
+        $payload = json_decode($body, true);
+
+        if (is_array($payload)) {
+            $this->processPayload($payload);
+        }
+
+        $this->queueClient->acknowledge($queueReceiveMessageTransfer);
+
+        return true;
     }
 
     /**

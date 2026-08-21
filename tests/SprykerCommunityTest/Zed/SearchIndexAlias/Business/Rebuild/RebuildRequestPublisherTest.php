@@ -12,9 +12,11 @@ namespace SprykerCommunityTest\Zed\SearchIndexAlias\Business\Rebuild;
 use Codeception\Test\Unit;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
+use Spryker\Client\Queue\QueueClient;
 use Spryker\Client\RabbitMq\RabbitMqConfig;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Broker\BrokerConnectionProvider;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildRequestPublisher;
+use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientBridge;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
 
 /**
@@ -37,15 +39,18 @@ class RebuildRequestPublisherTest extends Unit
 {
     protected BrokerConnectionProvider $brokerConnectionProvider;
 
+    protected SearchIndexAliasToQueueClientBridge $queueClient;
+
     protected function _before(): void
     {
         $this->brokerConnectionProvider = new BrokerConnectionProvider(new RabbitMqConfig());
+        $this->queueClient = new SearchIndexAliasToQueueClientBridge(new QueueClient());
     }
 
     public function testPublishWritesTheExpectedPayloadShapeOntoTheRealRebuildRequestQueue(): void
     {
         $searchIndexAliasConfig = new SearchIndexAliasConfig();
-        $rebuildRequestPublisher = new RebuildRequestPublisher($this->brokerConnectionProvider, $searchIndexAliasConfig);
+        $rebuildRequestPublisher = new RebuildRequestPublisher($this->queueClient, $searchIndexAliasConfig);
         $searchIndexRolloutTransfer = (new SearchIndexRolloutTransfer())->setIdSearchIndexRollout(9999);
         $searchIndexScopeTransfer = (new SearchIndexScopeTransfer())
             ->setSourceIdentifier('page')
@@ -68,7 +73,7 @@ class RebuildRequestPublisherTest extends Unit
     public function testPublishWritesANullTargetMappingPropertiesWhenNoneIsGiven(): void
     {
         $searchIndexAliasConfig = new SearchIndexAliasConfig();
-        $rebuildRequestPublisher = new RebuildRequestPublisher($this->brokerConnectionProvider, $searchIndexAliasConfig);
+        $rebuildRequestPublisher = new RebuildRequestPublisher($this->queueClient, $searchIndexAliasConfig);
         $searchIndexRolloutTransfer = (new SearchIndexRolloutTransfer())->setIdSearchIndexRollout(10000);
         $searchIndexScopeTransfer = (new SearchIndexScopeTransfer())
             ->setSourceIdentifier('page')
