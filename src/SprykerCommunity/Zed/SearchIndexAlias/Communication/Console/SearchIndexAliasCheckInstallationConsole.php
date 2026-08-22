@@ -268,9 +268,9 @@ class SearchIndexAliasCheckInstallationConsole extends Console
      * a full literal copy (every leaf page present verbatim), or a CHILDLESS copy of just the wrapper
      * entry (`label`/`title`/`bundle`/`controller`/`action`, no nested `<pages>`) relying on
      * `BreadcrumbNavigationMergeStrategy` to adopt this package's own leaf pages automatically at
-     * build-cache time. Checking only for the flat presence of every leaf key (as an earlier version of
-     * this check did) produces a false "missing" failure under the childless pattern, even though the
-     * pages genuinely render -- so a childless-but-present wrapper counts as fully satisfied here.
+     * build-cache time. Checking only for the flat presence of every leaf key would produce a false
+     * "missing" failure under the childless pattern, even though the pages genuinely render -- so a
+     * childless-but-present wrapper counts as fully satisfied here.
      *
      * @param \Symfony\Component\Console\Output\OutputInterface $output
      */
