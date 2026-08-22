@@ -95,10 +95,10 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
                 return 0;
             }
 
-            $this->applyDeduplicated($messages, $targetIndexName, $storeName);
+            $appliedCount = $this->applyDeduplicated($messages, $targetIndexName, $storeName);
             $this->acknowledge($channel, $deliveryTags);
 
-            return count($messages);
+            return $appliedCount;
         } finally {
             $channel->close();
             $connection->close();
@@ -144,13 +144,17 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
      * @param array<int, array<string, mixed>> $messages
      * @param string $targetIndexName
      * @param string $storeName
+     *
+     * @return int Number of distinct keys actually written/deleted for $storeName, after filtering out
+     *  other stores' messages and deduplicating -- see {@see MirrorQueueDrainInterface::drain()} on why
+     *  this, not the raw $messages count, is what the caller needs back.
      */
-    protected function applyDeduplicated(array $messages, string $targetIndexName, string $storeName): void
+    protected function applyDeduplicated(array $messages, string $targetIndexName, string $storeName): int
     {
         [$documentsToWrite, $idsToDelete] = $this->partitionLatestByKey($messages, $storeName);
 
         if ($documentsToWrite === [] && $idsToDelete === []) {
-            return;
+            return 0;
         }
 
         $index = $this->elasticaClientProvider->getClient()->getIndex($targetIndexName);
@@ -162,6 +166,8 @@ class MirrorQueueDrain implements MirrorQueueDrainInterface
         $this->deleteByIds($index, $idsToDelete);
 
         $index->refresh();
+
+        return count($documentsToWrite) + count($idsToDelete);
     }
 
     /**

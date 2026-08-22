@@ -23,9 +23,15 @@ interface MirrorQueueDrainInterface
      *  everything else on the queue is acknowledged and discarded, not left behind for a later scope to
      *  pick up (there is no "later scope" for a message that was never meant for this rebuild at all).
      *
-     * @return int Number of messages drained (0 means the queue was empty at the moment of this call --
-     *  the caller's signal that convergence may have been reached, though a message published after this
-     *  call returns is still possible and must be caught by a subsequent drain).
+     * @return int Number of messages actually applied to $targetIndexName for $storeName, AFTER filtering
+     *  out other stores' traffic and deduplicating by key -- deliberately NOT the raw number of messages
+     *  fetched from the queue. The mirror queue is shared across every store publishing to the same
+     *  sourceIdentifier (see class doc block), so a busy shop can keep this well above zero indefinitely
+     *  even once this scope's own writes are fully caught up; the caller's "have we converged" loop needs
+     *  a signal scoped to what it actually rebuilt. 0 means either the queue was empty, or everything on
+     *  it belonged to a different store -- both mean convergence may have been reached for THIS scope
+     *  (though a message published after this call returns is still possible and must be caught by a
+     *  subsequent drain).
      */
     public function drain(string $mirrorQueueName, string $targetIndexName, string $storeName): int;
 }

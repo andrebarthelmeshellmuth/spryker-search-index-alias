@@ -28,10 +28,12 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
 {
     /**
      * Bounded mirror-queue drain passes during BUILDING -- each pass drains whatever is currently in
-     * the queue; a pass that drains 0 messages means the queue was empty at that instant, the signal
-     * that convergence has (very likely) been reached. Bounded the same way IndexAdopter's catch-up
-     * loop is, for the same reason: a source producing writes faster than this can drain must fail
-     * loudly instead of looping forever.
+     * the queue and applies whatever of it belongs to this scope; a pass that applies 0 messages for
+     * THIS scope means convergence has (very likely) been reached -- MirrorQueueDrain::drain() already
+     * excludes other stores' traffic from that count (see its own docblock), so a busy multi-store shop
+     * publishing to other scopes doesn't keep this loop spinning. Bounded the same way IndexAdopter's
+     * catch-up loop is, for the same reason: a source producing writes faster than this can drain must
+     * fail loudly instead of looping forever.
      *
      * @var int
      */

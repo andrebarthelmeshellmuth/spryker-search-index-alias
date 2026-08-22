@@ -117,7 +117,9 @@ class MirrorQueueDrainTest extends Unit
 
         $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
-        $this->assertSame(2, $drainedCount);
+        // 2 raw messages, but they dedupe to ONE surviving key (the delete, since it's last) -- the
+        // return value reflects what was actually applied, not what was fetched off the broker.
+        $this->assertSame(1, $drainedCount);
         $this->assertFalse($this->documentExists($targetIndexName, 'sku-3'));
     }
 
@@ -132,8 +134,16 @@ class MirrorQueueDrainTest extends Unit
 
         $drainedCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
 
-        $this->assertSame(1, $drainedCount);
+        // The message WAS fetched and acknowledged (removed from the shared queue -- proven by the
+        // second call below finding nothing left), but it belongs to another store and was never
+        // applied -- 0, not 1, is what RebuildOrchestrator's convergence loop actually needs to see so a
+        // busy OTHER store's traffic can't keep it spinning forever. See MirrorQueueDrainInterface's own
+        // docblock.
+        $this->assertSame(0, $drainedCount);
         $this->assertFalse($this->documentExists($targetIndexName, 'sku-5'));
+
+        $secondPassCount = $this->mirrorQueueDrain->drain($queueName, $targetIndexName, 'DE');
+        $this->assertSame(0, $secondPassCount, 'The cross-store message must have been acknowledged off the queue already, not left behind.');
     }
 
     public function testDrainReturnsZeroForAnEmptyQueueAndDoesNotTouchTheTargetIndex(): void
