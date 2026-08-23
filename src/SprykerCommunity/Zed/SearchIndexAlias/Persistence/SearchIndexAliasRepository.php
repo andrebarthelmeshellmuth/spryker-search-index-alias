@@ -9,6 +9,7 @@ declare(strict_types = 1);
 
 namespace SprykerCommunity\Zed\SearchIndexAlias\Persistence;
 
+use Generated\Shared\Transfer\SearchIndexDeletionTransfer;
 use Generated\Shared\Transfer\SearchIndexDeployRollbackTargetTransfer;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 use Propel\Runtime\ActiveQuery\Criteria;
@@ -188,5 +189,32 @@ class SearchIndexAliasRepository extends AbstractRepository implements SearchInd
         }
 
         return $searchIndexDeployRollbackTargetTransfers;
+    }
+
+    /**
+     * @param string $sourceIdentifier
+     * @param string $storeName
+     * @param int $limit
+     *
+     * @return array<\Generated\Shared\Transfer\SearchIndexDeletionTransfer>
+     */
+    public function getDeletionHistoryForScope(string $sourceIdentifier, string $storeName, int $limit = 20): array
+    {
+        $spySearchIndexDeletions = $this->getFactory()
+            ->createSpySearchIndexDeletionQuery()
+            ->filterBySourceIdentifier($sourceIdentifier)
+            ->filterByStoreName($storeName)
+            ->orderByIdSearchIndexDeletion(Criteria::DESC)
+            ->limit($limit)
+            ->find();
+
+        $mapper = $this->getFactory()->createSearchIndexDeletionMapper();
+        $searchIndexDeletionTransfers = [];
+
+        foreach ($spySearchIndexDeletions as $spySearchIndexDeletion) {
+            $searchIndexDeletionTransfers[] = $mapper->mapEntityToTransfer($spySearchIndexDeletion, new SearchIndexDeletionTransfer());
+        }
+
+        return $searchIndexDeletionTransfers;
     }
 }

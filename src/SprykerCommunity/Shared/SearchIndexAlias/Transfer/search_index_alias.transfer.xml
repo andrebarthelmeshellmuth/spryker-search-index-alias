@@ -83,6 +83,16 @@
         <property name="searchIndexPhysicalIndices" type="SearchIndexPhysicalIndex[]" singular="searchIndexPhysicalIndex"/>
     </transfer>
 
+    <!-- One manually-deleted physical index — see spy_search_index_deletion's own schema comment for
+         why this is a separate table/transfer from SearchIndexRollout rather than another rollout status. -->
+    <transfer name="SearchIndexDeletion">
+        <property name="idSearchIndexDeletion" type="int"/>
+        <property name="searchIndexScope" type="SearchIndexScope"/>
+        <property name="indexName" type="string"/>
+        <property name="triggeredByUser" type="string"/>
+        <property name="createdAt" type="string"/>
+    </transfer>
+
     <!-- Read-only diagnostic result: whether this package's own Zed back-office pages are reachable by
          anybody other than an unrestricted (root-style) admin. Used only by
          `search-index-alias:check-installation`, nothing on the request path consults it. -->

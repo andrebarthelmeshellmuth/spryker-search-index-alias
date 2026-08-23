@@ -10,8 +10,10 @@ declare(strict_types = 1);
 namespace SprykerCommunityTest\Zed\SearchIndexAlias\Persistence;
 
 use Codeception\Test\Unit;
+use Generated\Shared\Transfer\SearchIndexDeletionTransfer;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
+use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexDeletionQuery;
 use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexRolloutQuery;
 use SprykerCommunity\Shared\SearchIndexAlias\SearchIndexAliasConfig;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasEntityManager;
@@ -49,11 +51,17 @@ class SearchIndexAliasRepositoryTest extends Unit
         SpySearchIndexRolloutQuery::create()
             ->filterBySourceIdentifier(static::TEST_SOURCE_IDENTIFIER)
             ->delete();
+        SpySearchIndexDeletionQuery::create()
+            ->filterBySourceIdentifier(static::TEST_SOURCE_IDENTIFIER)
+            ->delete();
     }
 
     protected function _after(): void
     {
         SpySearchIndexRolloutQuery::create()
+            ->filterBySourceIdentifier(static::TEST_SOURCE_IDENTIFIER)
+            ->delete();
+        SpySearchIndexDeletionQuery::create()
             ->filterBySourceIdentifier(static::TEST_SOURCE_IDENTIFIER)
             ->delete();
     }
@@ -148,6 +156,32 @@ class SearchIndexAliasRepositoryTest extends Unit
         $this->assertContains($newestDe->getIdSearchIndexRollout(), $latestIdsForThisSource);
         $this->assertContains($onlyAt->getIdSearchIndexRollout(), $latestIdsForThisSource);
         $this->assertCount(2, $latestIdsForThisSource, 'One row per distinct (source_identifier, store_name), not one per row created.');
+    }
+
+    public function testGetDeletionHistoryForScopeReturnsNewestFirst(): void
+    {
+        $first = $this->seedDeletion('phpunit_repo_alias_1');
+        $second = $this->seedDeletion('phpunit_repo_alias_2');
+
+        $history = (new SearchIndexAliasRepository())->getDeletionHistoryForScope(static::TEST_SOURCE_IDENTIFIER, static::TEST_STORE_NAME);
+
+        $this->assertCount(2, $history);
+        $this->assertSame($second->getIdSearchIndexDeletion(), $history[0]->getIdSearchIndexDeletion());
+        $this->assertSame($first->getIdSearchIndexDeletion(), $history[1]->getIdSearchIndexDeletion());
+    }
+
+    protected function seedDeletion(string $indexName): SearchIndexDeletionTransfer
+    {
+        return (new SearchIndexAliasEntityManager())->recordIndexDeletion(
+            (new SearchIndexDeletionTransfer())
+                ->setSearchIndexScope(
+                    (new SearchIndexScopeTransfer())
+                        ->setSourceIdentifier(static::TEST_SOURCE_IDENTIFIER)
+                        ->setStoreName(static::TEST_STORE_NAME)
+                        ->setAliasName('phpunit_repo_alias'),
+                )
+                ->setIndexName($indexName),
+        );
     }
 
     /**

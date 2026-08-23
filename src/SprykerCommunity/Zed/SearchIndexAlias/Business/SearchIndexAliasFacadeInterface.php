@@ -272,10 +272,11 @@ interface SearchIndexAliasFacadeInterface
      * @api
      *
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
+     * @param string|null $triggeredByUser
      *
      * @return array<string> The physical index names that were deleted.
      */
-    public function pruneScope(SearchIndexScopeTransfer $searchIndexScopeTransfer): array;
+    public function pruneScope(SearchIndexScopeTransfer $searchIndexScopeTransfer, ?string $triggeredByUser = null): array;
 
     /**
      * Detects alias drift (an alias resolving to zero or more than one physical index) -- see
@@ -327,7 +328,22 @@ interface SearchIndexAliasFacadeInterface
      *
      * @api
      *
+     * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param string $indexName
+     * @param string|null $triggeredByUser
      */
-    public function deleteIndex(string $indexName): void;
+    public function deleteIndex(SearchIndexScopeTransfer $searchIndexScopeTransfer, string $indexName, ?string $triggeredByUser = null): void;
+
+    /**
+     * Every manual/pruned deletion recorded for this scope, newest first -- see
+     * spy_search_index_deletion's own schema comment for why this is separate from `getRolloutHistory()`.
+     *
+     * @api
+     *
+     * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
+     * @param int $limit
+     *
+     * @return array<\Generated\Shared\Transfer\SearchIndexDeletionTransfer>
+     */
+    public function getDeletionHistory(SearchIndexScopeTransfer $searchIndexScopeTransfer, int $limit = 20): array;
 }

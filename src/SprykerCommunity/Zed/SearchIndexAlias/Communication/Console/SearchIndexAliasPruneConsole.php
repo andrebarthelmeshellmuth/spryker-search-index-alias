@@ -51,7 +51,7 @@ class SearchIndexAliasPruneConsole extends AbstractScopeConsole
             return static::CODE_ERROR;
         }
 
-        $deletedIndexNames = $this->getFacade()->pruneScope($searchIndexScopeTransfer);
+        $deletedIndexNames = $this->getFacade()->pruneScope($searchIndexScopeTransfer, get_current_user() ?: 'console');
 
         if ($deletedIndexNames === []) {
             $output->writeln(sprintf('<info>Nothing to prune for "%s".</info>', $aliasName));

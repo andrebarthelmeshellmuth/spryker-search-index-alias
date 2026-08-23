@@ -23,6 +23,7 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Health\SearchIndexHealthCheck
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Index\IndexEnumeratorInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Index\IndexNameBuilderInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Index\ScopeIndexOverviewInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexDeleterInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexPrunerInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildOrchestratorInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildRequestConsumerInterface;
@@ -375,15 +376,15 @@ class SearchIndexAliasFacadeTest extends Unit
         $this->assertSame($rollout, $facade->rollbackToIndex($this->createScope(), 'page-de-1', 'andre'));
     }
 
-    public function testDeleteIndexDelegatesToTheAliasManager(): void
+    public function testDeleteIndexDelegatesToTheIndexDeleter(): void
     {
         // Arrange
-        $aliasManagerMock = $this->getMockBuilder(AliasManagerInterface::class)->getMock();
-        $aliasManagerMock->expects($this->once())->method('deleteUnaliasedIndex')->with('page-de-1');
-        $facade = $this->createFacade($this->createFactoryMock(['createAliasManager'], $aliasManagerMock));
+        $deleterMock = $this->getMockBuilder(IndexDeleterInterface::class)->getMock();
+        $deleterMock->expects($this->once())->method('deleteIndex')->with($this->createScope(), 'page-de-1', 'andre');
+        $facade = $this->createFacade($this->createFactoryMock(['createIndexDeleter'], $deleterMock));
 
         // Act
-        $facade->deleteIndex('page-de-1');
+        $facade->deleteIndex($this->createScope(), 'page-de-1', 'andre');
     }
 
     protected function createScope(): SearchIndexScopeTransfer

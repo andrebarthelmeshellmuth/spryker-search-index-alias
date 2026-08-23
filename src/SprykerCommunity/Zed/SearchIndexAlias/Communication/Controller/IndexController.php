@@ -100,7 +100,14 @@ class IndexController extends AbstractScopeController
         $needsAdoption = $searchIndexAliasFacade->needsAdoption($searchIndexScopeTransfer);
         $activeSearchIndexRolloutTransfer = $needsAdoption ? null : $searchIndexAliasFacade->getActiveRollout($searchIndexScopeTransfer);
         $pendingRollbackTargetIndexName = $searchIndexAliasFacade->findPendingRollbackTarget($searchIndexScopeTransfer);
-        $indexRows = $this->buildIndexRows($searchIndexAliasFacade, $searchIndexScopeTransfer, $aliasName, $redirectTo, $pendingRollbackTargetIndexName);
+        $indexRows = $this->buildIndexRows(
+            $searchIndexAliasFacade,
+            $searchIndexScopeTransfer,
+            $aliasName,
+            $redirectTo,
+            $pendingRollbackTargetIndexName,
+            $activeSearchIndexRolloutTransfer?->getTargetIndexName(),
+        );
 
         return [
             'needsAdoption' => $needsAdoption,
@@ -124,6 +131,10 @@ class IndexController extends AbstractScopeController
      * @param string $aliasName
      * @param string $redirectTo
      * @param string|null $pendingRollbackTargetIndexName
+     * @param string|null $activeRolloutTargetIndexName The active (non-terminal) rollout's target, if
+     *  any -- deleting it out from under a pending flip would break `search-index-alias:deploy-flip`,
+     *  so this row never gets a Delete button (see `IndexDeleter::guardAgainstActiveRolloutTarget()`,
+     *  which refuses it at the Business layer too).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -133,25 +144,33 @@ class IndexController extends AbstractScopeController
         string $aliasName,
         string $redirectTo,
         ?string $pendingRollbackTargetIndexName,
+        ?string $activeRolloutTargetIndexName,
     ): array {
         $indexRows = [];
 
         foreach ($searchIndexAliasFacade->getIndicesForScope($searchIndexScopeTransfer)->getSearchIndexPhysicalIndices() as $searchIndexPhysicalIndexTransfer) {
             $indexName = $searchIndexPhysicalIndexTransfer->getIndexNameOrFail();
             $isCurrent = $searchIndexPhysicalIndexTransfer->getIsCurrentAlias();
+            $isActiveRolloutTarget = $indexName === $activeRolloutTargetIndexName;
+            $isRollbackPending = !$isCurrent && $indexName === $pendingRollbackTargetIndexName;
 
             $indexRows[] = [
                 'physicalIndex' => $searchIndexPhysicalIndexTransfer,
+                'isActiveRolloutTarget' => $isActiveRolloutTarget,
                 'rollbackFormView' => $isCurrent
                     ? null
                     : $this->getFactory()->createRollbackForm($aliasName, $indexName, $redirectTo)->createView(),
-                'deleteFormView' => $isCurrent
+                // Never offered for the active rollout's target (deleting it breaks the next deploy-flip
+                // -- see IndexDeleter::guardAgainstActiveRolloutTarget()) or a flagged rollback target
+                // (same failure mode, the other flag kind -- see guardAgainstPendingRollbackTarget()),
+                // both refused at the Business layer too, this just avoids the round trip.
+                'deleteFormView' => ($isCurrent || $isActiveRolloutTarget || $isRollbackPending)
                     ? null
                     : $this->getFactory()->createDeleteIndexForm($aliasName, $indexName, $redirectTo)->createView(),
                 'flagRollbackPendingFormView' => $isCurrent
                     ? null
                     : $this->getFactory()->createRollbackForm($aliasName, $indexName, $redirectTo)->createView(),
-                'isRollbackPending' => !$isCurrent && $indexName === $pendingRollbackTargetIndexName,
+                'isRollbackPending' => $isRollbackPending,
             ];
         }
 

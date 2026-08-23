@@ -64,7 +64,7 @@ class SearchIndexAliasCheckInstallationConsoleTest extends Unit
         $this->assertStringContainsString('the RabbitMQ Management HTTP API is reachable', $commandTester->getDisplay());
         $this->assertStringContainsString('rebuild-request queue round-trips via Client\Queue', $commandTester->getDisplay());
         $this->assertStringContainsString('the Zed GUI translation catalog is loaded', $commandTester->getDisplay());
-        $this->assertStringContainsString('all 49 Zed GUI strings are present in the translation catalog', $commandTester->getDisplay());
+        $this->assertStringContainsString('all 55 Zed GUI strings are present in the translation catalog', $commandTester->getDisplay());
         $this->assertStringContainsString('Everything checkable from the CLI is in place.', $commandTester->getDisplay());
     }
 

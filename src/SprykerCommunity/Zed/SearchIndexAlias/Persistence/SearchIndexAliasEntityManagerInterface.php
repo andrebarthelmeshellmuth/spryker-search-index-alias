@@ -9,6 +9,7 @@ declare(strict_types = 1);
 
 namespace SprykerCommunity\Zed\SearchIndexAlias\Persistence;
 
+use Generated\Shared\Transfer\SearchIndexDeletionTransfer;
 use Generated\Shared\Transfer\SearchIndexDeployRollbackTargetTransfer;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 
@@ -55,4 +56,12 @@ interface SearchIndexAliasEntityManagerInterface
      * @param string $storeName
      */
     public function deletePendingRollbackTargetForScope(string $sourceIdentifier, string $storeName): void;
+
+    /**
+     * Records that a physical index was deleted -- a fresh row every call, never an upsert (this is an
+     * append-only audit log, unlike the other two writers on this interface).
+     *
+     * @param \Generated\Shared\Transfer\SearchIndexDeletionTransfer $searchIndexDeletionTransfer
+     */
+    public function recordIndexDeletion(SearchIndexDeletionTransfer $searchIndexDeletionTransfer): SearchIndexDeletionTransfer;
 }

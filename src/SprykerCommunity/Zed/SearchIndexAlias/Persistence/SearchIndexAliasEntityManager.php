@@ -9,8 +9,10 @@ declare(strict_types = 1);
 
 namespace SprykerCommunity\Zed\SearchIndexAlias\Persistence;
 
+use Generated\Shared\Transfer\SearchIndexDeletionTransfer;
 use Generated\Shared\Transfer\SearchIndexDeployRollbackTargetTransfer;
 use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
+use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexDeletion;
 use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexRollout;
 use Propel\Runtime\Exception\PropelException;
 use Spryker\Zed\Kernel\Persistence\AbstractEntityManager;
@@ -126,6 +128,23 @@ class SearchIndexAliasEntityManager extends AbstractEntityManager implements Sea
             ->filterBySourceIdentifier($sourceIdentifier)
             ->filterByStoreName($storeName)
             ->delete();
+    }
+
+    /**
+     * @param \Generated\Shared\Transfer\SearchIndexDeletionTransfer $searchIndexDeletionTransfer
+     */
+    public function recordIndexDeletion(SearchIndexDeletionTransfer $searchIndexDeletionTransfer): SearchIndexDeletionTransfer
+    {
+        $spySearchIndexDeletion = $this->getFactory()
+            ->createSearchIndexDeletionMapper()
+            ->mapTransferToEntity($searchIndexDeletionTransfer, new SpySearchIndexDeletion());
+
+        $spySearchIndexDeletion->save();
+
+        return $this->getFactory()->createSearchIndexDeletionMapper()->mapEntityToTransfer(
+            $spySearchIndexDeletion,
+            $searchIndexDeletionTransfer,
+        );
     }
 
     /**

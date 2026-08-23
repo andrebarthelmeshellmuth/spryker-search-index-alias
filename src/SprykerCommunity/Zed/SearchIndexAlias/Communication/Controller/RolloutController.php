@@ -257,12 +257,20 @@ class RolloutController extends AbstractScopeController
         }
 
         $deleteIndexFormData = $deleteIndexForm->getData();
+        /** @var string $aliasName */
+        $aliasName = $deleteIndexFormData[DeleteIndexForm::FIELD_ALIAS_NAME];
         /** @var string $indexName */
         $indexName = $deleteIndexFormData[DeleteIndexForm::FIELD_INDEX_NAME];
         $redirectUrl = $this->resolveRedirectUrl((string)$deleteIndexFormData[DeleteIndexForm::FIELD_REDIRECT_TO]);
 
+        $searchIndexScopeTransfer = $this->resolveScopeOrRedirect($aliasName, $redirectUrl);
+
+        if ($searchIndexScopeTransfer instanceof RedirectResponse) {
+            return $searchIndexScopeTransfer;
+        }
+
         try {
-            $this->getFacade()->deleteIndex($indexName);
+            $this->getFacade()->deleteIndex($searchIndexScopeTransfer, $indexName, 'zed-gui');
             $this->addSuccessMessage(sprintf('Deleted index "%s".', $indexName));
         } catch (AliasOperationFailedException $aliasOperationFailedException) {
             $this->addErrorMessage($aliasOperationFailedException->getMessage());
@@ -272,10 +280,13 @@ class RolloutController extends AbstractScopeController
     }
 
     /**
-     * A pure, read-only audit log -- one row per rollout event, no actions. Deliberately has no forms:
-     * every action (adopt/rebuild/flip/abort/rollback/delete) lives on the Overview page instead, which
-     * is index-oriented and can show what each action would actually apply to. This page exists purely
-     * to answer "what happened, when, and who triggered it."
+     * A pure, read-only audit log, no actions. Deliberately has no forms: every action
+     * (adopt/rebuild/flip/abort/rollback/delete) lives on the Overview page instead, which is
+     * index-oriented and can show what each action would actually apply to. This page exists purely to
+     * answer "what happened, when, and who triggered it." Two separate feeds, not one merged timeline --
+     * `history` (rollout attempts) and `deletionHistory` (manual/pruned index deletions) are different
+     * event shapes with nothing in common to sort by beyond a timestamp; see
+     * spy_search_index_deletion's own schema comment for why a deletion is never itself a rollout row.
      *
      * @param \Symfony\Component\HttpFoundation\Request $request
      *
@@ -289,12 +300,13 @@ class RolloutController extends AbstractScopeController
         if ($searchIndexScopeTransfer === null) {
             $this->addErrorMessage(sprintf('No managed scope found for alias "%s".', $aliasName));
 
-            return $this->viewResponse(['aliasName' => $aliasName, 'history' => []]);
+            return $this->viewResponse(['aliasName' => $aliasName, 'history' => [], 'deletionHistory' => []]);
         }
 
         return $this->viewResponse([
             'aliasName' => $aliasName,
             'history' => $this->getFacade()->getRolloutHistory($searchIndexScopeTransfer),
+            'deletionHistory' => $this->getFacade()->getDeletionHistory($searchIndexScopeTransfer),
         ]);
     }
 }

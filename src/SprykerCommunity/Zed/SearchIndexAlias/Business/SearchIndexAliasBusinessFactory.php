@@ -50,6 +50,8 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Mirror\MirrorQueueDrain;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Mirror\MirrorQueueDrainInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Naming\CanonicalIndexNameResolver;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Naming\CanonicalIndexNameResolverInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexDeleter;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexDeleterInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexPruner;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexPrunerInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildOrchestrator;
@@ -271,6 +273,17 @@ class SearchIndexAliasBusinessFactory extends AbstractBusinessFactory
             $this->createPhysicalIndexLister(),
             $this->createAliasManager(),
             $this->getConfig(),
+            $this->getEntityManager(),
+            $this->getRepository(),
+        );
+    }
+
+    public function createIndexDeleter(): IndexDeleterInterface
+    {
+        return new IndexDeleter(
+            $this->createAliasManager(),
+            $this->getEntityManager(),
+            $this->getRepository(),
         );
     }
 

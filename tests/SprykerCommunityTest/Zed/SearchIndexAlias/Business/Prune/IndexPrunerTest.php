@@ -11,19 +11,29 @@ namespace SprykerCommunityTest\Zed\SearchIndexAlias\Business\Prune;
 
 use Codeception\Test\Unit;
 use Elastica\Client;
+use Generated\Shared\Transfer\SearchIndexDeployRollbackTargetTransfer;
+use Generated\Shared\Transfer\SearchIndexRolloutTransfer;
 use Generated\Shared\Transfer\SearchIndexScopeTransfer;
+use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexDeletionQuery;
+use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexDeployRollbackTargetQuery;
+use Orm\Zed\SearchIndexAlias\Persistence\SpySearchIndexRolloutQuery;
+use Propel\Runtime\ActiveQuery\Criteria;
 use Spryker\Zed\SearchElasticsearch\SearchElasticsearchConfig;
+use SprykerCommunity\Shared\SearchIndexAlias\SearchIndexAliasConfig as SharedSearchIndexAliasConfig;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Alias\AliasManager;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Client\ElasticaClientProvider;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Index\IndexNameBuilder;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Index\PhysicalIndexLister;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Prune\IndexPruner;
+use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasEntityManager;
+use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasRepository;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasConfig;
 
 /**
- * INTEGRATION TEST — real Elasticsearch/OpenSearch, real indices. The one behavior most worth protecting
- * live: the currently-aliased index is never a deletion candidate, and the oldest UNALIASED indices
- * beyond the keep count are the ones actually deleted (sorted by name, which sorts by embedded timestamp).
+ * INTEGRATION TEST — real Elasticsearch/OpenSearch, real indices. The behaviors most worth protecting
+ * live: the currently-aliased index, the active rollout's target, and a flagged pending rollback target
+ * are never deletion candidates, and among what's left, the oldest UNALIASED indices beyond the keep
+ * count are the ones actually deleted (sorted by name, which sorts by embedded timestamp).
  *
  * Auto-generated group annotations
  *
@@ -58,6 +68,10 @@ class IndexPrunerTest extends Unit
         foreach ($this->client->request('_cat/indices/' . static::TEST_PREFIX . '*?format=json')->getData() as $row) {
             $this->client->getIndex($row['index'])->delete();
         }
+
+        SpySearchIndexRolloutQuery::create()->filterBySourceIdentifier(static::TEST_PREFIX . '%', Criteria::LIKE)->delete();
+        SpySearchIndexDeletionQuery::create()->filterBySourceIdentifier(static::TEST_PREFIX . '%', Criteria::LIKE)->delete();
+        SpySearchIndexDeployRollbackTargetQuery::create()->filterBySourceIdentifier(static::TEST_PREFIX . '%', Criteria::LIKE)->delete();
     }
 
     public function testPruneScopeDeletesOnlyTheOldestUnaliasedIndicesBeyondTheKeepCount(): void
@@ -95,10 +109,75 @@ class IndexPrunerTest extends Unit
         $this->assertTrue($this->aliasManager->indexExists($first));
     }
 
+    public function testPruneScopeRecordsEachDeletionToTheAuditTrail(): void
+    {
+        $aliasName = static::TEST_PREFIX . 'audit';
+        $oldest = $this->createIndex($aliasName, '20260101_120000');
+        $current = $this->createIndex($aliasName, '20260102_120000');
+        $this->aliasManager->createAlias($aliasName, $current);
+
+        $this->createPruner(0)->pruneScope($this->createScope($aliasName), 'phpunit-user');
+
+        $deletionHistory = (new SearchIndexAliasRepository())->getDeletionHistoryForScope(
+            static::TEST_PREFIX . 'source',
+            'DE',
+        );
+
+        $this->assertCount(1, $deletionHistory);
+        $this->assertSame($oldest, $deletionHistory[0]->getIndexName());
+        $this->assertSame('phpunit-user', $deletionHistory[0]->getTriggeredByUser());
+    }
+
+    public function testPruneScopeNeverDeletesTheActiveRolloutsTargetIndexEvenIfItIsOldEnough(): void
+    {
+        $aliasName = static::TEST_PREFIX . 'active';
+        // The active rollout's target is the OLDEST candidate -- exactly the one a naive
+        // oldest-first prune would pick first -- to prove the guard, not just a keep-count coincidence.
+        $target = $this->createIndex($aliasName, '20260101_120000');
+        $other = $this->createIndex($aliasName, '20260102_120000');
+        $current = $this->createIndex($aliasName, '20260103_120000');
+        $this->aliasManager->createAlias($aliasName, $current);
+
+        $searchIndexScopeTransfer = $this->createScope($aliasName);
+        (new SearchIndexAliasEntityManager())->createRollout(
+            (new SearchIndexRolloutTransfer())
+                ->setSearchIndexScope($searchIndexScopeTransfer)
+                ->setStatus(SharedSearchIndexAliasConfig::STATUS_READY)
+                ->setTargetIndexName($target),
+        );
+
+        $deleted = $this->createPruner(0)->pruneScope($searchIndexScopeTransfer);
+
+        $this->assertSame([$other], $deleted, 'The active rollout target must never be pruned, even at keep-count 0.');
+        $this->assertTrue($this->aliasManager->indexExists($target));
+    }
+
+    public function testPruneScopeNeverDeletesAPendingRollbackTargetIndexEvenIfItIsOldEnough(): void
+    {
+        $aliasName = static::TEST_PREFIX . 'rollback';
+        $target = $this->createIndex($aliasName, '20260101_120000');
+        $other = $this->createIndex($aliasName, '20260102_120000');
+        $current = $this->createIndex($aliasName, '20260103_120000');
+        $this->aliasManager->createAlias($aliasName, $current);
+
+        $searchIndexScopeTransfer = $this->createScope($aliasName);
+        (new SearchIndexAliasEntityManager())->savePendingRollbackTarget(
+            (new SearchIndexDeployRollbackTargetTransfer())
+                ->setSearchIndexScope($searchIndexScopeTransfer)
+                ->setTargetIndexName($target)
+                ->setTriggeredByUser('zed-gui'),
+        );
+
+        $deleted = $this->createPruner(0)->pruneScope($searchIndexScopeTransfer);
+
+        $this->assertSame([$other], $deleted, 'The pending rollback target must never be pruned, even at keep-count 0.');
+        $this->assertTrue($this->aliasManager->indexExists($target));
+    }
+
     protected function createScope(string $aliasName): SearchIndexScopeTransfer
     {
         return (new SearchIndexScopeTransfer())
-            ->setSourceIdentifier('page')
+            ->setSourceIdentifier(static::TEST_PREFIX . 'source')
             ->setStoreName('DE')
             ->setAliasName($aliasName);
     }
@@ -128,6 +207,8 @@ class IndexPrunerTest extends Unit
             new PhysicalIndexLister(new ElasticaClientProvider(new SearchElasticsearchConfig()), new IndexNameBuilder($searchIndexAliasConfig)),
             new AliasManager(new ElasticaClientProvider(new SearchElasticsearchConfig())),
             $searchIndexAliasConfig,
+            new SearchIndexAliasEntityManager(),
+            new SearchIndexAliasRepository(),
         );
     }
 }

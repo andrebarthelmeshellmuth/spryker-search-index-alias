@@ -67,4 +67,13 @@ interface SearchIndexAliasRepositoryInterface
      * @return array<\Generated\Shared\Transfer\SearchIndexDeployRollbackTargetTransfer>
      */
     public function getAllPendingRollbackTargets(): array;
+
+    /**
+     * @param string $sourceIdentifier
+     * @param string $storeName
+     * @param int $limit
+     *
+     * @return array<\Generated\Shared\Transfer\SearchIndexDeletionTransfer>
+     */
+    public function getDeletionHistoryForScope(string $sourceIdentifier, string $storeName, int $limit = 20): array;
 }

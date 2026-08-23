@@ -88,4 +88,32 @@
         </unique>
     </table>
 
+    <!--
+        One row per manually-deleted physical index — deleting a non-current index (Overview page's
+        "Delete" button, or search-index-alias:prune's bulk cleanup) is NOT a rollout: there is no
+        target build, no flip, nothing that fits spy_search_index_rollout's own "one row per rollout
+        ATTEMPT" model (see that table's comment). Kept as its own table, deliberately never joined into
+        getLatestRolloutPerScope()/getActiveRolloutForScope() (which drive `search-index-alias:status`
+        and the Overview page's "Active rollout" banner) — a deletion of some old, already-unaliased
+        backup index has nothing to do with a scope's current rollout state, and must never shadow it
+        there. The History page merges this table's rows into its Rollout view purely for a complete,
+        "what happened and who did it" audit trail.
+    -->
+    <table name="spy_search_index_deletion" idMethod="native" identifierQuoting="true">
+        <column name="id_search_index_deletion" type="INTEGER" required="true" autoIncrement="true" primaryKey="true"/>
+        <column name="source_identifier" type="VARCHAR" size="128" required="true"/>
+        <column name="store_name" type="VARCHAR" size="64" required="true"/>
+        <column name="alias_name" type="VARCHAR" size="255" required="true" description="Denormalized copy of the scope's canonical alias name, same rationale as the other two tables' own column."/>
+        <column name="index_name" type="VARCHAR" size="255" required="true" description="The physical index that was deleted."/>
+        <column name="triggered_by_user" type="VARCHAR" size="255" required="false" description="Zed username/email for a GUI-triggered delete, or a fixed marker (e.g. 'console') for search-index-alias:prune's non-interactive bulk deletes."/>
+
+        <behavior name="timestampable"/>
+        <id-method-parameter value="spy_search_index_deletion_pk_seq"/>
+
+        <index name="index-spy_search_index_deletion-scope">
+            <index-column name="source_identifier"/>
+            <index-column name="store_name"/>
+        </index>
+    </table>
+
 </database>

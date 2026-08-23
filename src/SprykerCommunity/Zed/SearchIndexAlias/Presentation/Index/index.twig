@@ -147,6 +147,9 @@
                                             {% if physicalIndex.isCurrentAlias %}
                                                 <span class="label label-success">{{ 'current alias' | trans }}</span>
                                             {% endif %}
+                                            {% if row.isActiveRolloutTarget %}
+                                                <span class="label label-info" title="{{ 'The target of this scope\'s active rollout -- Delete is disabled here so it can\'t be pulled out from under a pending flip.' | trans }}">{{ 'active rollout target' | trans }}</span>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             {% if physicalIndex.status == 'current' %}

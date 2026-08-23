@@ -299,12 +299,13 @@ class SearchIndexAliasFacade extends AbstractFacade implements SearchIndexAliasF
      * @api
      *
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
+     * @param string|null $triggeredByUser
      *
      * @return array<string>
      */
-    public function pruneScope(SearchIndexScopeTransfer $searchIndexScopeTransfer): array
+    public function pruneScope(SearchIndexScopeTransfer $searchIndexScopeTransfer, ?string $triggeredByUser = null): array
     {
-        return $this->getFactory()->createIndexPruner()->pruneScope($searchIndexScopeTransfer);
+        return $this->getFactory()->createIndexPruner()->pruneScope($searchIndexScopeTransfer, $triggeredByUser);
     }
 
     /**
@@ -356,10 +357,29 @@ class SearchIndexAliasFacade extends AbstractFacade implements SearchIndexAliasF
      *
      * @api
      *
+     * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param string $indexName
+     * @param string|null $triggeredByUser
      */
-    public function deleteIndex(string $indexName): void
+    public function deleteIndex(SearchIndexScopeTransfer $searchIndexScopeTransfer, string $indexName, ?string $triggeredByUser = null): void
     {
-        $this->getFactory()->createAliasManager()->deleteUnaliasedIndex($indexName);
+        $this->getFactory()->createIndexDeleter()->deleteIndex($searchIndexScopeTransfer, $indexName, $triggeredByUser);
+    }
+
+    /**
+     * @api
+     *
+     * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
+     * @param int $limit
+     *
+     * @return array<\Generated\Shared\Transfer\SearchIndexDeletionTransfer>
+     */
+    public function getDeletionHistory(SearchIndexScopeTransfer $searchIndexScopeTransfer, int $limit = 20): array
+    {
+        return $this->getRepository()->getDeletionHistoryForScope(
+            $searchIndexScopeTransfer->getSourceIdentifierOrFail(),
+            $searchIndexScopeTransfer->getStoreNameOrFail(),
+            $limit,
+        );
     }
 }
