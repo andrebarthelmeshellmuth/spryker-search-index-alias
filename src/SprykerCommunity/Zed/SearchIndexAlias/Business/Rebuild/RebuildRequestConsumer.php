@@ -84,6 +84,7 @@ class RebuildRequestConsumer implements RebuildRequestConsumerInterface
             $searchIndexScopeTransfer,
             is_array($targetMappingProperties) ? $targetMappingProperties : null,
             (bool)($payload['optimizeForBulkLoad'] ?? false),
+            (bool)($payload['fromSchema'] ?? true),
         );
     }
 }

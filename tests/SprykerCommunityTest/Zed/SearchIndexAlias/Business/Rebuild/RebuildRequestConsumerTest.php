@@ -121,6 +121,10 @@ class RebuildRequestConsumerTest extends Unit
         $this->assertSame(1, $capturingOrchestrator->callCount);
         $this->assertSame($searchIndexRolloutTransfer->getIdSearchIndexRollout(), $capturingOrchestrator->lastRolloutTransfer?->getIdSearchIndexRollout());
         $this->assertSame('page', $capturingOrchestrator->lastScopeTransfer?->getSourceIdentifier());
+        // The payload above has no 'fromSchema' key -- a message queued by an older publisher, before
+        // this field existed. The fallback must match the current default (true), not silently regress
+        // an in-flight message queued right as a deploy flips the default.
+        $this->assertTrue($capturingOrchestrator->lastFromSchema);
     }
 
     public function testConsumeOneAcksAndDropsAMessageForARolloutRowThatNoLongerExists(): void
@@ -158,11 +162,14 @@ class RebuildRequestConsumerTest extends Unit
 
             public ?SearchIndexScopeTransfer $lastScopeTransfer = null;
 
+            public bool $lastFromSchema = false;
+
             public function start(
                 SearchIndexScopeTransfer $searchIndexScopeTransfer,
                 ?string $triggeredByUser = null,
                 ?array $targetMappingProperties = null,
                 bool $optimizeForBulkLoad = false,
+                bool $fromSchema = false,
             ): SearchIndexRolloutTransfer {
                 return new SearchIndexRolloutTransfer();
             }
@@ -172,6 +179,7 @@ class RebuildRequestConsumerTest extends Unit
                 ?string $triggeredByUser = null,
                 ?array $targetMappingProperties = null,
                 bool $optimizeForBulkLoad = false,
+                bool $fromSchema = false,
             ): SearchIndexRolloutTransfer {
                 return new SearchIndexRolloutTransfer();
             }
@@ -181,10 +189,12 @@ class RebuildRequestConsumerTest extends Unit
                 SearchIndexScopeTransfer $searchIndexScopeTransfer,
                 ?array $targetMappingProperties,
                 bool $optimizeForBulkLoad,
+                bool $fromSchema = false,
             ): SearchIndexRolloutTransfer {
                 $this->callCount++;
                 $this->lastRolloutTransfer = $searchIndexRolloutTransfer;
                 $this->lastScopeTransfer = $searchIndexScopeTransfer;
+                $this->lastFromSchema = $fromSchema;
 
                 return $searchIndexRolloutTransfer;
             }

@@ -149,6 +149,66 @@ class SearchIndexAliasRebuildConsoleTest extends Unit
         $this->assertStringContainsString('Rollout failed: bulk load timed out', $commandTester->getDisplay());
     }
 
+    public function testDefaultsToFromSchemaTrueWhenFromLiveIsNotPassed(): void
+    {
+        // Arrange
+        $rollout = (new SearchIndexRolloutTransfer())
+            ->setIdSearchIndexRollout(9)
+            ->setStatus(SearchIndexAliasConfig::STATUS_BUILDING)
+            ->setTargetIndexName('page-de-2')
+            ->setActualDocumentCount(0);
+        $facadeMock = $this->getMockBuilder(SearchIndexAliasFacade::class)
+            ->onlyMethods(['getManagedScopes', 'startRebuild'])
+            ->getMock();
+        $facadeMock->method('getManagedScopes')->willReturn([$this->createScope()]);
+        $facadeMock->expects($this->once())
+            ->method('startRebuild')
+            ->with($this->anything(), $this->anything(), null, false, true)
+            ->willReturn($rollout);
+
+        $console = new SearchIndexAliasRebuildConsole();
+        $console->setFacade($facadeMock);
+        $application = new Application();
+        $application->add($console);
+        $commandTester = new CommandTester($application->find(SearchIndexAliasRebuildConsole::COMMAND_NAME));
+
+        // Act
+        $exitCode = $commandTester->execute(['alias' => 'page-de']);
+
+        // Assert
+        $this->assertSame(SearchIndexAliasRebuildConsole::CODE_SUCCESS, $exitCode);
+    }
+
+    public function testFromLivePassesFromSchemaFalseThroughToStartRebuild(): void
+    {
+        // Arrange
+        $rollout = (new SearchIndexRolloutTransfer())
+            ->setIdSearchIndexRollout(9)
+            ->setStatus(SearchIndexAliasConfig::STATUS_BUILDING)
+            ->setTargetIndexName('page-de-2')
+            ->setActualDocumentCount(0);
+        $facadeMock = $this->getMockBuilder(SearchIndexAliasFacade::class)
+            ->onlyMethods(['getManagedScopes', 'startRebuild'])
+            ->getMock();
+        $facadeMock->method('getManagedScopes')->willReturn([$this->createScope()]);
+        $facadeMock->expects($this->once())
+            ->method('startRebuild')
+            ->with($this->anything(), $this->anything(), null, false, false)
+            ->willReturn($rollout);
+
+        $console = new SearchIndexAliasRebuildConsole();
+        $console->setFacade($facadeMock);
+        $application = new Application();
+        $application->add($console);
+        $commandTester = new CommandTester($application->find(SearchIndexAliasRebuildConsole::COMMAND_NAME));
+
+        // Act
+        $exitCode = $commandTester->execute(['alias' => 'page-de', '--from-live' => true]);
+
+        // Assert
+        $this->assertSame(SearchIndexAliasRebuildConsole::CODE_SUCCESS, $exitCode);
+    }
+
     public function testFailsWhenAnotherRolloutIsAlreadyInFlight(): void
     {
         // Arrange

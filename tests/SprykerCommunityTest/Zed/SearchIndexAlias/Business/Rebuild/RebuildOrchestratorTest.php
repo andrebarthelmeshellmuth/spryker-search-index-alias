@@ -108,7 +108,7 @@ class RebuildOrchestratorTest extends Unit
         $searchIndexScopeTransfer = $this->createScope($aliasName);
         $rebuildOrchestrator = $this->createOrchestrator(false);
 
-        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_READY, $rolloutAfterStart->getStatus());
         $this->assertNotNull($rolloutAfterStart->getTargetIndexName());
@@ -140,7 +140,7 @@ class RebuildOrchestratorTest extends Unit
         $liveIndexName = $this->fakeLiveIndex($aliasName);
         $searchIndexScopeTransfer = $this->createScope($aliasName);
         $rebuildOrchestrator = $this->createOrchestrator(false);
-        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
 
         $rolloutAfterAbort = $rebuildOrchestrator->abort($rolloutAfterStart, 'operator cancelled');
 
@@ -157,7 +157,7 @@ class RebuildOrchestratorTest extends Unit
         $searchIndexScopeTransfer = $this->createScope($aliasName);
         $rebuildOrchestrator = $this->createOrchestrator(true);
 
-        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_FLIPPED, $searchIndexRolloutTransfer->getStatus());
         $this->assertSame([$searchIndexRolloutTransfer->getTargetIndexNameOrFail()], $this->aliasManager->getIndicesForAlias($aliasName));
@@ -170,7 +170,7 @@ class RebuildOrchestratorTest extends Unit
         $searchIndexScopeTransfer = $this->createScope($aliasName);
         $rebuildOrchestrator = $this->createOrchestrator(false);
 
-        $rolloutAfterRequest = $rebuildOrchestrator->requestRebuildAsync($searchIndexScopeTransfer);
+        $rolloutAfterRequest = $rebuildOrchestrator->requestRebuildAsync($searchIndexScopeTransfer, fromSchema: false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_BUILDING, $rolloutAfterRequest->getStatus());
 
@@ -179,7 +179,7 @@ class RebuildOrchestratorTest extends Unit
         $this->assertNotNull($payload);
         $this->assertSame($rolloutAfterRequest->getIdSearchIndexRollout(), $payload['idSearchIndexRollout']);
 
-        $rolloutAfterExecute = $rebuildOrchestrator->executeQueuedRebuild($rolloutAfterRequest, $searchIndexScopeTransfer, null, false);
+        $rolloutAfterExecute = $rebuildOrchestrator->executeQueuedRebuild($rolloutAfterRequest, $searchIndexScopeTransfer, null, false, false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_READY, $rolloutAfterExecute->getStatus());
     }
@@ -207,7 +207,7 @@ class RebuildOrchestratorTest extends Unit
         };
         $rebuildOrchestrator = $this->createOrchestrator(false, [$expanderPlugin]);
 
-        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_READY, $searchIndexRolloutTransfer->getStatus());
         $targetIndexName = $searchIndexRolloutTransfer->getTargetIndexNameOrFail();
@@ -222,7 +222,7 @@ class RebuildOrchestratorTest extends Unit
         $searchIndexScopeTransfer = $this->createScope($aliasName);
         $rebuildOrchestrator = $this->createOrchestrator(false);
 
-        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $searchIndexRolloutTransfer = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
 
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_READY, $searchIndexRolloutTransfer->getStatus());
         $targetIndexName = $searchIndexRolloutTransfer->getTargetIndexNameOrFail();

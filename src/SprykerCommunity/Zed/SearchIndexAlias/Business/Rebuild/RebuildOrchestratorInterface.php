@@ -30,6 +30,13 @@ interface RebuildOrchestratorInterface
      * @param bool $optimizeForBulkLoad Disables automatic refresh/replicas on the target during the bulk
      *  load, restoring both afterward -- real overhead savings at a large catalog's scale, invisible at
      *  a small one. Opt-in, default off.
+     * @param bool $fromSchema Build the target's base mapping+settings from the project's own
+     *  `Shared/Search/Schema/*.json` definition(s) -- the default, see `SchemaIndexDefinitionResolver`'s
+     *  own doc block. Pass `false` to instead clone the live index's current mapping+settings, e.g. when
+     *  live has legitimately drifted from schema.json and that drift needs to survive the rebuild. The
+     *  live index is always read for the mapping-diff classification regardless of this flag
+     *  (informational only when `fromSchema` is true); it's just not used as the target's actual base in
+     *  that case.
      *
      * @throws \SprykerCommunity\Zed\SearchIndexAlias\Persistence\Exception\ConcurrentRolloutException
      */
@@ -38,6 +45,7 @@ interface RebuildOrchestratorInterface
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer;
 
     /**
@@ -49,6 +57,7 @@ interface RebuildOrchestratorInterface
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `start()`'s own doc block.
      *
      * @throws \SprykerCommunity\Zed\SearchIndexAlias\Persistence\Exception\ConcurrentRolloutException
      */
@@ -57,6 +66,7 @@ interface RebuildOrchestratorInterface
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer;
 
     /**
@@ -67,12 +77,14 @@ interface RebuildOrchestratorInterface
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `start()`'s own doc block.
      */
     public function executeQueuedRebuild(
         SearchIndexRolloutTransfer $searchIndexRolloutTransfer,
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?array $targetMappingProperties,
         bool $optimizeForBulkLoad,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer;
 
     /**

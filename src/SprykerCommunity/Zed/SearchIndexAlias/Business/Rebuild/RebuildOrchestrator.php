@@ -21,6 +21,7 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Mirror\MirrorQueueBinderInter
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Mirror\MirrorQueueDrainInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutFinisherInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarterInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Schema\SchemaIndexDefinitionResolverInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Persistence\SearchIndexAliasEntityManagerInterface;
 use Throwable;
 
@@ -53,6 +54,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      * @param \SprykerCommunity\Zed\SearchIndexAlias\Business\Rebuild\RebuildRequestPublisherInterface $rebuildRequestPublisher
      * @param bool $isAutoFlipEnabled
      * @param array<\SprykerCommunity\Zed\SearchIndexAlias\Dependency\Plugin\TargetIndexSettingsExpanderPluginInterface> $targetIndexSettingsExpanderPlugins
+     * @param \SprykerCommunity\Zed\SearchIndexAlias\Business\Schema\SchemaIndexDefinitionResolverInterface|null $schemaIndexDefinitionResolver
      */
     public function __construct(
         protected RolloutStarterInterface $rolloutStarter,
@@ -68,6 +70,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
         protected RebuildRequestPublisherInterface $rebuildRequestPublisher,
         protected bool $isAutoFlipEnabled,
         protected array $targetIndexSettingsExpanderPlugins = [],
+        protected ?SchemaIndexDefinitionResolverInterface $schemaIndexDefinitionResolver = null,
     ) {
     }
 
@@ -76,12 +79,21 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema Build the target's base mapping+settings from the project's own
+     *  `Shared/Search/Schema/*.json` definition(s) -- the default, and the same source `search:setup`
+     *  itself builds from, see `SchemaIndexDefinitionResolver`'s own doc block. Pass `false` to instead
+     *  clone the live index's current mapping+settings (the old, pre-`fromSchema` behavior) -- worth
+     *  doing when live has legitimately drifted from schema.json (a manual patch, a deploy that hasn't
+     *  re-run `search:setup` yet) and that drift needs to survive the rebuild. The live index is always
+     *  read for the mapping-diff classification regardless of this flag (informational only when
+     *  `fromSchema` is true); it's just not used as the target's actual base in that case.
      */
     public function start(
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         $searchIndexRolloutTransfer = $this->rolloutStarter->start($searchIndexScopeTransfer, $triggeredByUser);
 
@@ -89,7 +101,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
             return $this->failNoLiveIndex($searchIndexRolloutTransfer);
         }
 
-        return $this->continueBuild($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad);
+        return $this->continueBuild($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad, $fromSchema);
     }
 
     /**
@@ -107,12 +119,14 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `start()`'s own doc block.
      */
     public function requestRebuildAsync(
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         $searchIndexRolloutTransfer = $this->rolloutStarter->start($searchIndexScopeTransfer, $triggeredByUser);
 
@@ -120,7 +134,7 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
             return $this->failNoLiveIndex($searchIndexRolloutTransfer);
         }
 
-        $this->rebuildRequestPublisher->publish($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad);
+        $this->rebuildRequestPublisher->publish($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad, $fromSchema);
 
         return $searchIndexRolloutTransfer;
     }
@@ -134,18 +148,20 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `start()`'s own doc block.
      */
     public function executeQueuedRebuild(
         SearchIndexRolloutTransfer $searchIndexRolloutTransfer,
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?array $targetMappingProperties,
         bool $optimizeForBulkLoad,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         if ($searchIndexRolloutTransfer->getLiveIndexName() === null) {
             return $this->failNoLiveIndex($searchIndexRolloutTransfer);
         }
 
-        return $this->continueBuild($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad);
+        return $this->continueBuild($searchIndexRolloutTransfer, $searchIndexScopeTransfer, $targetMappingProperties, $optimizeForBulkLoad, $fromSchema);
     }
 
     /**
@@ -220,19 +236,21 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `start()`'s own doc block.
      */
     protected function continueBuild(
         SearchIndexRolloutTransfer $searchIndexRolloutTransfer,
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?array $targetMappingProperties,
         bool $optimizeForBulkLoad,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         $liveIndexName = $searchIndexRolloutTransfer->getLiveIndexNameOrFail();
         $targetIndexName = null;
         $bulkLoadSettingsToRestore = null;
 
         try {
-            $targetIndexName = $this->buildTarget($searchIndexScopeTransfer, $searchIndexRolloutTransfer, $liveIndexName, $targetMappingProperties);
+            $targetIndexName = $this->buildTarget($searchIndexScopeTransfer, $searchIndexRolloutTransfer, $liveIndexName, $targetMappingProperties, $fromSchema);
             $mirrorQueueName = $this->mirrorQueueBinder->bind($searchIndexRolloutTransfer);
 
             $searchIndexRolloutTransfer->setMirrorQueueName($mirrorQueueName);
@@ -277,35 +295,52 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
     }
 
     /**
-     * Builds the target index's shape: clone live's current mapping/settings -- running the settings
-     * through this package's `TargetIndexSettingsExpanderPluginInterface` stack first (see that
-     * interface's own doc block for why this is the only moment `analysis` can differ from live's) -- then
-     * layer any caller-supplied mapping change on top (always safe -- the target has zero documents at
-     * this point). Classifies the resulting diff against live purely for the rollout's own record and the
-     * operator-facing pre-flight tooling (see MappingDiffClassifierInterface doc block) -- the
-     * classification is never used to gate anything in this method itself.
+     * Builds the target index's shape: by default ($fromSchema), build fresh from the project's own
+     * `Shared/Search/Schema/*.json` definition(s) (see `SchemaIndexDefinitionResolver`'s own doc block
+     * for why); with $fromSchema false, clone live's current mapping/settings instead (note live's
+     * mapping is still fetched either way, purely so the diff classification below has something real to
+     * compare against). Either way, the settings then run through this package's
+     * `TargetIndexSettingsExpanderPluginInterface` stack (see that interface's own doc block for why
+     * this is the only moment `analysis` can differ from its base), then any caller-supplied mapping
+     * change is layered on top (always safe -- the target has zero documents at this point). Classifies
+     * the resulting diff against live purely for the rollout's own record and the operator-facing
+     * pre-flight tooling (see MappingDiffClassifierInterface doc block) -- the classification is never
+     * used to gate anything in this method itself, in either mode.
      *
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param \Generated\Shared\Transfer\SearchIndexRolloutTransfer $searchIndexRolloutTransfer
      * @param string $liveIndexName
      * @param array<string, mixed>|null $targetMappingProperties
+     * @param bool $fromSchema See `start()`'s own doc block.
      */
     protected function buildTarget(
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         SearchIndexRolloutTransfer $searchIndexRolloutTransfer,
         string $liveIndexName,
         ?array $targetMappingProperties,
+        bool $fromSchema = true,
     ): string {
         $targetIndexName = $this->indexNameBuilder->buildTargetIndexName($searchIndexScopeTransfer->getAliasNameOrFail());
 
         $liveMapping = $this->indexCloner->getMapping($liveIndexName);
-        $targetSettings = $this->indexCloner->getFilteredSettings($liveIndexName);
+
+        if ($fromSchema) {
+            $schemaDefinition = $this->getSchemaIndexDefinitionResolverOrFail()->resolveMappingAndSettings(
+                $searchIndexScopeTransfer->getAliasNameOrFail(),
+                $searchIndexScopeTransfer->getStoreNameOrFail(),
+            );
+            $baseMapping = $schemaDefinition['mapping'];
+            $targetSettings = $schemaDefinition['settings'];
+        } else {
+            $baseMapping = $liveMapping;
+            $targetSettings = $this->indexCloner->getFilteredSettings($liveIndexName);
+        }
 
         foreach ($this->targetIndexSettingsExpanderPlugins as $targetIndexSettingsExpanderPlugin) {
             $targetSettings = $targetIndexSettingsExpanderPlugin->expand($searchIndexScopeTransfer, $targetSettings);
         }
 
-        $this->indexCloner->createIndexWithMappingAndSettings($targetIndexName, $liveMapping, $targetSettings);
+        $this->indexCloner->createIndexWithMappingAndSettings($targetIndexName, $baseMapping, $targetSettings);
 
         if ($targetMappingProperties !== null) {
             $this->indexCloner->applyMapping($targetIndexName, $targetMappingProperties);
@@ -319,6 +354,20 @@ class RebuildOrchestrator implements RebuildOrchestratorInterface
         $this->entityManager->updateRollout($searchIndexRolloutTransfer);
 
         return $targetIndexName;
+    }
+
+    /**
+     * @throws \RuntimeException Only reachable if a caller passes $fromSchema=true without the resolver
+     *  having been wired -- the factory always wires it, so this is a defensive guard, not an expected
+     *  runtime path.
+     */
+    protected function getSchemaIndexDefinitionResolverOrFail(): SchemaIndexDefinitionResolverInterface
+    {
+        if ($this->schemaIndexDefinitionResolver === null) {
+            throw new RuntimeException('fromSchema=true requires a SchemaIndexDefinitionResolver to be wired into this class.');
+        }
+
+        return $this->schemaIndexDefinitionResolver;
     }
 
     /**

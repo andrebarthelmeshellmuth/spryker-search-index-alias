@@ -153,7 +153,7 @@ class DeployFlipRunnerTest extends Unit
         $rebuildOrchestrator = $this->createOrchestrator();
         $rolloutFinisher = new RolloutFinisher(new SearchIndexAliasEntityManager());
 
-        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer);
+        $rolloutAfterStart = $rebuildOrchestrator->start($searchIndexScopeTransfer, fromSchema: false);
         $this->assertSame(SharedSearchIndexAliasConfig::STATUS_READY, $rolloutAfterStart->getStatus());
         $rolloutFinisher->markFlipPending($rolloutAfterStart);
 

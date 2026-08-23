@@ -39,12 +39,14 @@ class RebuildRequestPublisher implements RebuildRequestPublisherInterface
      * @param \Generated\Shared\Transfer\SearchIndexScopeTransfer $searchIndexScopeTransfer
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `RebuildOrchestratorInterface::start()`'s own doc block.
      */
     public function publish(
         SearchIndexRolloutTransfer $searchIndexRolloutTransfer,
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?array $targetMappingProperties,
         bool $optimizeForBulkLoad,
+        bool $fromSchema = true,
     ): void {
         $body = json_encode([
             'idSearchIndexRollout' => $searchIndexRolloutTransfer->getIdSearchIndexRolloutOrFail(),
@@ -53,6 +55,7 @@ class RebuildRequestPublisher implements RebuildRequestPublisherInterface
             'aliasName' => $searchIndexScopeTransfer->getAliasNameOrFail(),
             'targetMappingProperties' => $targetMappingProperties,
             'optimizeForBulkLoad' => $optimizeForBulkLoad,
+            'fromSchema' => $fromSchema,
         ]);
 
         $this->queueClient->sendMessage(

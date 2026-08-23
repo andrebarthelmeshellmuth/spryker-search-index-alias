@@ -44,6 +44,11 @@ class SearchIndexAliasRebuildConsole extends AbstractScopeConsole
      */
     public const OPTION_OPTIMIZE = 'optimize';
 
+    /**
+     * @var string
+     */
+    public const OPTION_FROM_LIVE = 'from-live';
+
     protected function configure(): void
     {
         $this->setName(static::COMMAND_NAME);
@@ -53,9 +58,9 @@ class SearchIndexAliasRebuildConsole extends AbstractScopeConsole
             static::OPTION_MAPPING_FILE,
             null,
             InputOption::VALUE_REQUIRED,
-            'Path to a JSON file of the form {"properties": {...}} to layer on top of the live index\'s ' .
-            'current mapping for the new target -- omit to rebuild with the mapping unchanged (e.g. to ' .
-            'recover from suspected drift).',
+            'Path to a JSON file of the form {"properties": {...}} to layer on top of the new target\'s ' .
+            'mapping -- omit to rebuild with the mapping unchanged (e.g. to recover from suspected drift). ' .
+            'Still layers on top of the schema-built base (the default -- see --from-live).',
         );
         $this->addOption(static::OPTION_USER, null, InputOption::VALUE_REQUIRED, 'Recorded on the rollout row as who triggered it.');
         $this->addOption(
@@ -65,6 +70,15 @@ class SearchIndexAliasRebuildConsole extends AbstractScopeConsole
             'Disable refresh/replicas on the target index for the duration of the bulk load, restoring both ' .
             'afterward -- speeds up large bulk loads at the cost of near-real-time search on the target ' .
             'until it converges.',
+        );
+        $this->addOption(
+            static::OPTION_FROM_LIVE,
+            null,
+            InputOption::VALUE_NONE,
+            'Build the target\'s base mapping+settings by cloning the live index instead of the project\'s ' .
+            'own Shared/Search/Schema/*.json definition(s) (the default). Use this to recover from suspected ' .
+            'schema.json drift, or when live has a mapping/settings change (e.g. a manual patch) not yet ' .
+            'reflected in schema.json. See the README for the full tradeoff.',
         );
 
         parent::configure();
@@ -97,9 +111,10 @@ class SearchIndexAliasRebuildConsole extends AbstractScopeConsole
         $optionUser = $input->getOption(static::OPTION_USER);
         $triggeredByUser = $optionUser ?: (get_current_user() ?: 'console');
         $optimizeForBulkLoad = (bool)$input->getOption(static::OPTION_OPTIMIZE);
+        $fromSchema = !$input->getOption(static::OPTION_FROM_LIVE);
 
         try {
-            $searchIndexRolloutTransfer = $this->getFacade()->startRebuild($searchIndexScopeTransfer, $triggeredByUser, $targetMappingProperties, $optimizeForBulkLoad);
+            $searchIndexRolloutTransfer = $this->getFacade()->startRebuild($searchIndexScopeTransfer, $triggeredByUser, $targetMappingProperties, $optimizeForBulkLoad, $fromSchema);
         } catch (ConcurrentRolloutException $concurrentRolloutException) {
             $output->writeln(sprintf('<error>%s</error>', $concurrentRolloutException->getMessage()));
 

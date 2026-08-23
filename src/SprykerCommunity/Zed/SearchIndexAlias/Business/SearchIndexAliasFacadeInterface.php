@@ -128,6 +128,10 @@ interface SearchIndexAliasFacadeInterface
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad Disables automatic refresh/replicas on the target during the bulk
      *  load, restoring both afterward. Opt-in, default off.
+     * @param bool $fromSchema Build the target's base mapping+settings from the project's own
+     *  `Shared/Search/Schema/*.json` definition(s) -- the default, see `SchemaIndexDefinitionResolver`'s
+     *  own doc block. Pass `false` to instead clone the live index's current mapping+settings, e.g. when
+     *  live has legitimately drifted from schema.json and that drift needs to survive the rebuild.
      *
      * @throws \SprykerCommunity\Zed\SearchIndexAlias\Persistence\Exception\ConcurrentRolloutException
      */
@@ -136,6 +140,7 @@ interface SearchIndexAliasFacadeInterface
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer;
 
     /**
@@ -148,6 +153,7 @@ interface SearchIndexAliasFacadeInterface
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `startRebuild()`'s own doc block.
      *
      * @throws \SprykerCommunity\Zed\SearchIndexAlias\Persistence\Exception\ConcurrentRolloutException
      */
@@ -156,6 +162,7 @@ interface SearchIndexAliasFacadeInterface
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer;
 
     /**

@@ -31,8 +31,10 @@ with zero cleanup on the live side.
    the `_aliases` API's `remove_index` action to atomically delete the old concrete index and add the
    alias in the SAME transaction — zero window where the name resolves to nothing.
 
-2. **Rebuild** (`search-index-alias:rebuild`). Clones the live index's current mapping/settings onto a
-   new target (optionally layering a mapping change on top — always safe, the target is empty), binds a
+2. **Rebuild** (`search-index-alias:rebuild`). Builds a new target's mapping+settings from the project's
+   own `Shared/Search/Schema/*.json` definition by default (`--from-live` clones the live index's current
+   mapping/settings instead — see "Applying a schema.json change" below), optionally layering a mapping
+   change on top — always safe, the target is empty. Binds a
    RabbitMQ queue to the same exchange the live publish/sync pipeline writes to (a *mirror* of the real
    sync queue, not instead of it), then bulk-loads the target directly from the `spy_*_search` tables'
    `data` column — bypassing the publish/sync queue entirely, which is what makes this fast even for a
@@ -64,6 +66,26 @@ with zero cleanup on the live side.
 A rollout's full lifecycle (`building` → `ready` → `flipping` → `flipped`/`aborted`/`failed`) is persisted
 in `spy_search_index_rollout`, with a DB-enforced (not just application-checked) guard against two
 concurrent rollouts for the same scope.
+
+### Applying a schema.json change
+
+By default, `search-index-alias:rebuild` builds the target's mapping+settings from the project's own
+`Shared/Search/Schema/*.json` definition — the exact same source `search:setup` itself builds from, via
+core's own `IndexDefinitionBuilder`/`IndexDefinitionLoader`/`IndexDefinitionMerger` pipeline (reused, not
+reimplemented, so a source declared across several files — core's own base definition, any community
+package's contribution, the project's own override — is merged exactly the way a real `search:setup` run
+would merge them). This means a code-level `analysis` change (a new/edited analyzer, filter, tokenizer —
+anything under a schema file's `settings` key), or any other schema.json edit, reaches the target on the
+very next rebuild — no special flag needed. The live index is still read for the rollout's own
+mapping-diff record (informational only); it's just never used as the target's actual base.
+
+`--from-live` opts back into the pre-schema-default behavior: clone the *live* index's current
+mapping/settings instead of building from schema.json. Reach for it when live has legitimately drifted
+from its schema file — a manual mapping patch, or a deploy that hasn't re-run `search:setup` yet — and
+that drift needs to survive the rebuild rather than be silently discarded. Everything else about the
+rebuild — the blue-green mechanics, the mirror queue, the atomic flip, `--mapping-file` layering on top
+afterward — works exactly the same regardless of this flag; it only changes where the *starting*
+mapping+settings come from.
 
 ## Installation
 
@@ -281,7 +303,7 @@ Override `Pyz\Zed\SearchIndexAlias\SearchIndexAliasConfig` (extending this packa
 |---|---|
 | `search-index-alias:status [alias]` | Table of every managed scope: adopted?, last rollout status, target index, doc count. |
 | `search-index-alias:adopt <alias>` | First-time migration of a concrete index into an alias. Run once per scope. |
-| `search-index-alias:rebuild <alias> [--mapping-file=] [--user=] [--optimize]` | Starts a rebuild and blocks until it finishes; optionally layers a mapping change from a `{"properties": {...}}` JSON file. `--optimize` disables the target index's refresh interval/replicas for the duration of the bulk load (restored afterward) — worthwhile for a large catalog, at the cost of near-real-time search on the target until it converges. |
+| `search-index-alias:rebuild <alias> [--mapping-file=] [--from-live] [--user=] [--optimize]` | Starts a rebuild and blocks until it finishes; builds the target from the project's own `Shared/Search/Schema/*.json` definition(s) by default, or optionally layers a mapping change on top from a `{"properties": {...}}` JSON file. `--optimize` disables the target index's refresh interval/replicas for the duration of the bulk load (restored afterward) — worthwhile for a large catalog, at the cost of near-real-time search on the target until it converges. `--from-live` clones the live index's mapping+settings instead of building from schema.json — see "Applying a schema.json change" above. |
 | `search-index-alias:rebuild-worker [--stop-when-empty\|-s]` | Consumes rebuild requests dispatched from the Zed GUI (see below); long-running by default like `queue:worker:start`, use `--stop-when-empty` to drain and exit once. |
 | `search-index-alias:flip <alias>` | Atomically switches live traffic to a `ready` rollout's target. |
 | `search-index-alias:mark-flip-pending <alias> [--off]` | Flags (or, with `--off`, unflags) a scope's `ready` rollout as "flip this the next time `deploy-flip` runs" — the console counterpart to the Overview page's "Flag for next deploy"/"Unflag" toggle. Does not flip anything itself. |

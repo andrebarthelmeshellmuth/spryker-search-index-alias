@@ -68,6 +68,7 @@ class RebuildRequestPublisherTest extends Unit
         $this->assertSame('phpunit_publisher_page', $payload['aliasName']);
         $this->assertSame(['properties' => ['sku' => ['type' => 'keyword']]], $payload['targetMappingProperties']);
         $this->assertTrue($payload['optimizeForBulkLoad']);
+        $this->assertTrue($payload['fromSchema']);
     }
 
     public function testPublishWritesANullTargetMappingPropertiesWhenNoneIsGiven(): void

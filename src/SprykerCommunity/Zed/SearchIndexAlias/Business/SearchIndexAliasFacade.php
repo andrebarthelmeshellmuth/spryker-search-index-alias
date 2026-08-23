@@ -141,18 +141,21 @@ class SearchIndexAliasFacade extends AbstractFacade implements SearchIndexAliasF
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `RebuildOrchestratorInterface::start()`'s own doc block.
      */
     public function startRebuild(
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         return $this->getFactory()->createRebuildOrchestrator()->start(
             $searchIndexScopeTransfer,
             $triggeredByUser,
             $targetMappingProperties,
             $optimizeForBulkLoad,
+            $fromSchema,
         );
     }
 
@@ -166,18 +169,21 @@ class SearchIndexAliasFacade extends AbstractFacade implements SearchIndexAliasF
      * @param string|null $triggeredByUser
      * @param array<string, mixed>|null $targetMappingProperties
      * @param bool $optimizeForBulkLoad
+     * @param bool $fromSchema See `RebuildOrchestratorInterface::start()`'s own doc block.
      */
     public function requestRebuildAsync(
         SearchIndexScopeTransfer $searchIndexScopeTransfer,
         ?string $triggeredByUser = null,
         ?array $targetMappingProperties = null,
         bool $optimizeForBulkLoad = false,
+        bool $fromSchema = true,
     ): SearchIndexRolloutTransfer {
         return $this->getFactory()->createRebuildOrchestrator()->requestRebuildAsync(
             $searchIndexScopeTransfer,
             $triggeredByUser,
             $targetMappingProperties,
             $optimizeForBulkLoad,
+            $fromSchema,
         );
     }
 

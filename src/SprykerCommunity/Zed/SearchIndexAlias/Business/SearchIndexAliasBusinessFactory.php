@@ -13,6 +13,13 @@ use GuzzleHttp\Client as GuzzleClient;
 use Spryker\Client\RabbitMq\RabbitMqConfig as ClientRabbitMqConfig;
 use Spryker\Zed\Kernel\Business\AbstractBusinessFactory;
 use Spryker\Zed\RabbitMq\RabbitMqConfig as ZedRabbitMqConfig;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Builder\IndexDefinitionBuilder;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Builder\IndexDefinitionBuilderInterface;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Finder\SchemaDefinitionFinder;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Loader\IndexDefinitionLoader;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Merger\IndexDefinitionMerger;
+use Spryker\Zed\SearchElasticsearch\Business\Definition\Reader\IndexDefinitionReader;
+use Spryker\Zed\SearchElasticsearch\Business\SourceIdentifier\SourceIdentifier;
 use Spryker\Zed\SearchElasticsearch\SearchElasticsearchConfig;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Adoption\IndexAdopter;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Adoption\IndexAdopterInterface;
@@ -68,6 +75,9 @@ use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutGuard;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutGuardInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarter;
 use SprykerCommunity\Zed\SearchIndexAlias\Business\Rollout\RolloutStarterInterface;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Schema\PlainJsonUtilEncodingService;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Schema\SchemaIndexDefinitionResolver;
+use SprykerCommunity\Zed\SearchIndexAlias\Business\Schema\SchemaIndexDefinitionResolverInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Client\SearchIndexAliasToQueueClientInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\Dependency\Facade\SearchIndexAliasToStoreFacadeInterface;
 use SprykerCommunity\Zed\SearchIndexAlias\SearchIndexAliasDependencyProvider;
@@ -241,7 +251,62 @@ class SearchIndexAliasBusinessFactory extends AbstractBusinessFactory
             $this->createRebuildRequestPublisher(),
             $this->getConfig()->isAutoFlipEnabled(),
             $this->getTargetIndexSettingsExpanderPlugins(),
+            $this->createSchemaIndexDefinitionResolver(),
         );
+    }
+
+    /**
+     * Reconstructs core's own (`spryker/search-elasticsearch`, already a hard dependency of this
+     * package) schema-JSON discovery+merge pipeline standalone -- see `SchemaIndexDefinitionResolver`'s
+     * own doc block for why this is reused rather than reimplemented. Every collaborator here is core's
+     * own class, unmodified; only `PlainJsonUtilEncodingService` is this package's own (a
+     * dependency-free stand-in for `spryker/util-encoding-service`, which isn't otherwise required here).
+     */
+    public function createSchemaIndexDefinitionResolver(): SchemaIndexDefinitionResolverInterface
+    {
+        return new SchemaIndexDefinitionResolver($this->createCoreIndexDefinitionBuilder());
+    }
+
+    protected function createCoreIndexDefinitionBuilder(): IndexDefinitionBuilderInterface
+    {
+        return new IndexDefinitionBuilder(
+            $this->createCoreIndexDefinitionLoader(),
+            $this->createCoreIndexDefinitionMerger(),
+        );
+    }
+
+    protected function createCoreIndexDefinitionMerger(): IndexDefinitionMerger
+    {
+        return new IndexDefinitionMerger();
+    }
+
+    protected function createCoreIndexDefinitionLoader(): IndexDefinitionLoader
+    {
+        return new IndexDefinitionLoader(
+            $this->createCoreSchemaDefinitionFinder(),
+            $this->createCoreIndexDefinitionReader(),
+            $this->createCoreSourceIdentifier(),
+        );
+    }
+
+    protected function createCoreSchemaDefinitionFinder(): SchemaDefinitionFinder
+    {
+        return new SchemaDefinitionFinder($this->createSearchElasticsearchConfig());
+    }
+
+    protected function createCoreIndexDefinitionReader(): IndexDefinitionReader
+    {
+        return new IndexDefinitionReader($this->createPlainJsonUtilEncodingService());
+    }
+
+    protected function createCoreSourceIdentifier(): SourceIdentifier
+    {
+        return new SourceIdentifier($this->createSearchElasticsearchConfig());
+    }
+
+    protected function createPlainJsonUtilEncodingService(): PlainJsonUtilEncodingService
+    {
+        return new PlainJsonUtilEncodingService();
     }
 
     /**

@@ -175,6 +175,20 @@ class SearchIndexAliasFacadeTest extends Unit
         $this->assertSame($rollout, $facade->startRebuild($this->createScope(), 'andre', ['properties' => []], true));
     }
 
+    public function testStartRebuildDelegatesTheFromSchemaFlagToTheRebuildOrchestrator(): void
+    {
+        // Arrange
+        $rollout = new SearchIndexRolloutTransfer();
+        $orchestratorMock = $this->getMockBuilder(RebuildOrchestratorInterface::class)->getMock();
+        $orchestratorMock->expects($this->once())->method('start')
+            ->with($this->createScope(), 'andre', null, false, true)
+            ->willReturn($rollout);
+        $facade = $this->createFacade($this->createFactoryMock(['createRebuildOrchestrator'], $orchestratorMock));
+
+        // Act & Assert
+        $this->assertSame($rollout, $facade->startRebuild($this->createScope(), 'andre', null, false, true));
+    }
+
     public function testRequestRebuildAsyncDelegatesToTheRebuildOrchestrator(): void
     {
         // Arrange
