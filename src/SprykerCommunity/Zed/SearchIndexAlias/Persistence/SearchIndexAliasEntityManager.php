@@ -76,9 +76,7 @@ class SearchIndexAliasEntityManager extends AbstractEntityManager implements Sea
             ->createSpySearchIndexRolloutQuery()
             ->findOneByIdSearchIndexRollout($searchIndexRolloutTransfer->getIdSearchIndexRolloutOrFail());
 
-        if ($spySearchIndexRollout === null) {
-            $spySearchIndexRollout = new SpySearchIndexRollout();
-        }
+        $spySearchIndexRollout ??= new SpySearchIndexRollout();
 
         $this->getFactory()->createSearchIndexRolloutMapper()->mapTransferToEntity($searchIndexRolloutTransfer, $spySearchIndexRollout);
         $this->applyActiveScopeKey($spySearchIndexRollout);
