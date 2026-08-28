@@ -105,8 +105,8 @@ Two OpenSearch-3.x notes for adopters, neither of them a change to this package:
 - **`nmslib` k-NN engine was removed in OpenSearch 3.0** — a `knn_vector` field must name `engine: lucene`
   (or `faiss`).
 
-Full write-up: [Migrating to OpenSearch 3.x](https://github.com/andrebarthelmeshellmuth/spryker-search-ranking/blob/main/docs/opensearch-3.x-migration.md)
-(in `spryker-community/search-ranking`).
+Full write-up, including why the neural-search transformer surfaces on *every* rebuild and the k-NN
+adopter notes: [Migrating to OpenSearch 3.x](docs/opensearch-3.x-migration.md).
 
 ## Installation
 
