@@ -87,6 +87,27 @@ rebuild — the blue-green mechanics, the mirror queue, the atomic flip, `--mapp
 afterward — works exactly the same regardless of this flag; it only changes where the *starting*
 mapping+settings come from.
 
+## Search engine compatibility
+
+Verified on **OpenSearch 1.3.4, 2.11, 3.5.0 and Elasticsearch 8.11**. The blue-green rebuild uses only
+long-stable index APIs — create-with-mapping, `_alias` actions, `_settings`, `_count`, `_reindex`, and
+`_bulk` — that behave identically across both engine lineages. The OpenSearch 3.5 upgrade needed **no
+code change** in this package: on a demoshop upgraded from 1.3.4, `check-installation` passes and a full
+`search:setup` + re-export/reindex converges normally on 3.5.
+
+Two OpenSearch-3.x notes for adopters, neither of them a change to this package:
+
+- **`index.knn` is a static setting.** If a scope's `schema.json` enables k-NN (`"index": { "knn": true }`),
+  a plain `search:setup` re-run against the already-open concrete index fails with
+  `Can't update non dynamic settings [[index.knn]]`. Add `index.knn` to your project's
+  `SearchElasticsearchConfig::getStaticIndexSettings()`. A `search-index-alias` rebuild is unaffected — it
+  always creates a fresh index, where static settings apply cleanly.
+- **`nmslib` k-NN engine was removed in OpenSearch 3.0** — a `knn_vector` field must name `engine: lucene`
+  (or `faiss`).
+
+Full write-up: [Migrating to OpenSearch 3.x](https://github.com/andrebarthelmeshellmuth/spryker-search-ranking/blob/main/docs/opensearch-3.x-migration.md)
+(in `spryker-community/search-ranking`).
+
 ## Installation
 
 ```
